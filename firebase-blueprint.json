@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "Application users and their roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "orders": {
+      "title": "Order",
+      "description": "Customer orders",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "address": { "type": "object" },
+        "landmark": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "cancelled", "delivered"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "items", "total", "address", "status", "createdAt"]
+    },
+    "products": {
+      "title": "Product",
+      "description": "Store products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "category", "image", "description"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile documents"
+    },
+    "/orders/{orderId}": {
+      "schema": "orders",
+      "description": "Order documents"
+    },
+    "/products/{productId}": {
+      "schema": "products",
+      "description": "Product documents"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "JMB MART",
+  "description": "A mobile-friendly village grocery store app with voice search, AI chatbot, and image generation for essentials.",
+  "requestFramePermissions": ["microphone", "geolocation"]
+}
