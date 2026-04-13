@@ -1,35 +1,50 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "@/src/lib/firebase";
-import { collection, query, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, orderBy, getDocs, writeBatch } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, orderBy, getDocs, writeBatch, where } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup } from "lucide-react";
+import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup, Users, FileUp, Download, Check, Ban, UserCheck, LayoutGrid, Tag } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ImageGenerator } from "@/src/components/ImageGenerator";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "motion/react";
 import { products as initialProducts } from "@/src/data/products";
+import Papa from 'papaparse';
 
 export function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersCount, setUsersCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: '',
+    mrp: '',
     category: '',
     image: '',
     description: ''
   });
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    icon: ''
+  });
   const [isAdding, setIsAdding] = useState(false);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const [bulkUploadProgress, setBulkUploadProgress] = useState({ total: 0, current: 0 });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [deliveryPartners, setDeliveryPartners] = useState<any[]>([]);
 
   useEffect(() => {
     const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
+    const deliveryQuery = query(collection(db, "users"), where("role", "==", "delivery"));
 
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
       setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -45,9 +60,27 @@ export function AdminDashboard() {
       setIsLoading(false);
     });
 
+    const unsubscribeUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setUsersCount(snapshot.size);
+    }, (error) => {
+      console.error("Users snapshot error:", error);
+    });
+
+    const unsubscribeDelivery = onSnapshot(deliveryQuery, (snapshot) => {
+      setDeliveryPartners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubscribeCategories = onSnapshot(query(collection(db, "categories"), orderBy("name", "asc")), (snapshot) => {
+      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubscribeOrders();
       unsubscribeProducts();
+      unsubscribeUsers();
+      unsubscribeDelivery();
+      unsubscribeCategories();
     };
   }, []);
 
@@ -55,6 +88,8 @@ export function AdminDashboard() {
     setIsSyncing(true);
     try {
       const batch = writeBatch(db);
+      
+      // Sync Products
       const existingProductsSnap = await getDocs(collection(db, "products"));
       const existingNames = new Set(existingProductsSnap.docs.map(d => d.data().name));
 
@@ -69,8 +104,28 @@ export function AdminDashboard() {
         }
       });
 
+      // Sync Categories
+      const existingCatsSnap = await getDocs(collection(db, "categories"));
+      if (existingCatsSnap.empty) {
+        const initialCategories = [
+          { name: 'Grains', icon: '🌾' },
+          { name: 'Oils', icon: '🛢️' },
+          { name: 'Soaps', icon: '🧼' },
+          { name: 'Spices', icon: '🌶️' },
+          { name: 'Dairy', icon: '🥛' },
+          { name: 'Snacks', icon: '🍪' },
+        ];
+        initialCategories.forEach(cat => {
+          const newDocRef = doc(collection(db, "categories"));
+          batch.set(newDocRef, {
+            ...cat,
+            createdAt: serverTimestamp()
+          });
+        });
+      }
+
       await batch.commit();
-      console.log("Initial products synced to store!");
+      console.log("Initial data synced to store!");
     } catch (error) {
       console.error("Sync error:", error);
     } finally {
@@ -81,11 +136,26 @@ export function AdminDashboard() {
   const stats = {
     total: orders.length,
     pending: orders.filter(o => o.status === 'pending').length,
-    cancelled: orders.filter(o => o.status === 'cancelled').length,
-    delivered: orders.filter(o => o.status === 'delivered').length
+    delivered: orders.filter(o => o.status === 'delivered').length,
+    users: usersCount
   };
 
-  const handleUpdateOrderStatus = async (orderId: string, status: 'delivered' | 'cancelled') => {
+  const [activeTab, setActiveTab] = useState("orders");
+
+  const handleAssignDelivery = async (orderId: string, deliveryPersonId: string) => {
+    try {
+      const otp = Math.floor(1000 + Math.random() * 9000).toString();
+      await updateDoc(doc(db, "orders", orderId), { 
+        deliveryPersonId,
+        status: 'assigned',
+        otp
+      });
+    } catch (error) {
+      console.error("Error assigning delivery:", error);
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, status: 'delivered' | 'cancelled' | 'out_for_delivery') => {
     try {
       await updateDoc(doc(db, "orders", orderId), { status });
     } catch (error) {
@@ -101,6 +171,14 @@ export function AdminDashboard() {
     }
   };
 
+  const handleToggleUserBlock = async (userId: string, currentStatus: boolean) => {
+    try {
+      await updateDoc(doc(db, "users", userId), { isBlocked: !currentStatus });
+    } catch (error) {
+      console.error("Error toggling user block:", error);
+    }
+  };
+
   const handleDeleteProduct = async (productId: string) => {
     try {
       await deleteDoc(doc(db, "products", productId));
@@ -109,17 +187,51 @@ export function AdminDashboard() {
     }
   };
 
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategory.name || !newCategory.icon) return;
+    try {
+      await addDoc(collection(db, "categories"), {
+        ...newCategory,
+        createdAt: serverTimestamp()
+      });
+      setNewCategory({ name: '', icon: '' });
+    } catch (error) {
+      console.error("Error adding category:", error);
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    try {
+      await deleteDoc(doc(db, "categories", categoryId));
+    } catch (error) {
+      console.error("Error deleting category:", error);
+    }
+  };
+
+  const handleUpdateCategoryIcon = async (categoryId: string, newIcon: string) => {
+    try {
+      await updateDoc(doc(db, "categories", categoryId), { icon: newIcon });
+    } catch (error) {
+      console.error("Error updating category icon:", error);
+    }
+  };
+
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAdding(true);
     try {
       await addDoc(collection(db, "products"), {
-        ...newProduct,
+        name: newProduct.name,
         price: Number(newProduct.price),
+        mrp: newProduct.mrp ? Number(newProduct.mrp) : null,
+        category: newProduct.category,
+        image: newProduct.image,
+        description: newProduct.description,
         status: 'available',
         createdAt: serverTimestamp()
       });
-      setNewProduct({ name: '', price: '', category: '', image: '', description: '' });
+      setNewProduct({ name: '', price: '', mrp: '', category: '', image: '', description: '' });
     } catch (error) {
       console.error("Error adding product:", error);
     } finally {
@@ -127,11 +239,73 @@ export function AdminDashboard() {
     }
   };
 
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsBulkUploading(true);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const data = results.data as any[];
+        setBulkUploadProgress({ total: data.length, current: 0 });
+
+        try {
+          const batchSize = 500; // Firestore batch limit
+          for (let i = 0; i < data.length; i += batchSize) {
+            const batch = writeBatch(db);
+            const chunk = data.slice(i, i + batchSize);
+
+            chunk.forEach(item => {
+              const newDocRef = doc(collection(db, "products"));
+              batch.set(newDocRef, {
+                name: item.name,
+                price: Number(item.price),
+                category: item.category,
+                image: item.image,
+                description: item.description,
+                status: 'available',
+                createdAt: serverTimestamp()
+              });
+            });
+
+            await batch.commit();
+            setBulkUploadProgress(prev => ({ ...prev, current: Math.min(prev.total, i + batchSize) }));
+          }
+          console.log("Bulk upload complete!");
+        } catch (error) {
+          console.error("Bulk upload error:", error);
+        } finally {
+          setIsBulkUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      },
+      error: (error) => {
+        console.error("CSV Parse error:", error);
+        setIsBulkUploading(false);
+      }
+    });
+  };
+
+  const downloadSampleCSV = () => {
+    const csvContent = "name,price,category,image,description\nBasmati Rice,450,Grains,https://picsum.photos/seed/rice/400/400,Premium quality long grain rice\nFresh Milk,60,Dairy,https://picsum.photos/seed/milk/400/400,Farm fresh cow milk";
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "sample_products.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
-        <p className="text-emerald-800 font-medium">Loading Store Data...</p>
+        <Loader2 className="w-10 h-10 animate-spin text-red-600" />
+        <p className="text-red-800 font-medium">Loading Store Data...</p>
       </div>
     );
   }
@@ -146,21 +320,26 @@ export function AdminDashboard() {
         <Button 
           onClick={handleSyncProducts} 
           disabled={isSyncing}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl px-8 h-12 shadow-lg shadow-emerald-100 active:scale-95 transition-all"
+          className="bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl px-8 h-12 shadow-lg shadow-red-100 active:scale-95 transition-all"
         >
           {isSyncing ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <DatabaseBackup className="w-5 h-5 mr-2" />}
           Sync Products
         </Button>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: 'Total Orders', value: stats.total, icon: ShoppingBag, color: 'emerald' },
-          { label: 'Pending', value: stats.pending, icon: Clock, color: 'orange' },
-          { label: 'Delivered', value: stats.delivered, icon: CheckCircle2, color: 'blue' },
-          { label: 'Cancelled', value: stats.cancelled, icon: XCircle, color: 'red' }
+          { label: 'Total Orders', value: stats.total, icon: ShoppingBag, color: 'red', tab: 'orders' },
+          { label: 'Pending', value: stats.pending, icon: Clock, color: 'orange', tab: 'orders' },
+          { label: 'Delivered', value: stats.delivered, icon: CheckCircle2, color: 'blue', tab: 'orders' },
+          { label: 'Total Users', value: stats.users, icon: Users, color: 'purple', tab: 'users' },
+          { label: 'Cancelled', value: orders.filter(o => o.status === 'cancelled').length, icon: XCircle, color: 'red', tab: 'orders' }
         ].map((stat) => (
-          <Card key={stat.label} className="border-none shadow-sm bg-white rounded-3xl overflow-hidden group hover:shadow-md transition-all">
+          <Card 
+            key={stat.label} 
+            className="border-none shadow-sm bg-white rounded-3xl overflow-hidden group hover:shadow-md transition-all cursor-pointer active:scale-95"
+            onClick={() => setActiveTab(stat.tab)}
+          >
             <CardContent className="p-6 flex flex-col items-center justify-center relative">
               <div className={`absolute top-2 right-2 p-2 rounded-xl bg-${stat.color}-50 text-${stat.color}-600 opacity-40 group-hover:opacity-100 transition-all`}>
                 <stat.icon className="w-6 h-6" />
@@ -172,12 +351,18 @@ export function AdminDashboard() {
         ))}
       </div>
 
-      <Tabs defaultValue="orders" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="flex w-full bg-gray-100 p-1.5 rounded-2xl h-14 mb-8">
-          <TabsTrigger value="orders" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Orders</TabsTrigger>
-          <TabsTrigger value="inventory" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Inventory</TabsTrigger>
-          <TabsTrigger value="add" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Add Product</TabsTrigger>
-          <TabsTrigger value="ai" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+          <TabsTrigger value="orders" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Orders</TabsTrigger>
+          <TabsTrigger value="users" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Users</TabsTrigger>
+          <TabsTrigger value="categories" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Categories</TabsTrigger>
+          <TabsTrigger value="inventory" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Inventory</TabsTrigger>
+          <TabsTrigger value="add" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Add Product</TabsTrigger>
+          <TabsTrigger value="bulk" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+            <FileUp className="w-3 h-3" />
+            Bulk Upload
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
             <Sparkles className="w-3 h-3" />
             AI Lab
           </TabsTrigger>
@@ -202,7 +387,7 @@ export function AdminDashboard() {
                           <Badge className={`uppercase text-[10px] font-black px-3 py-1 rounded-full ${
                             order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
                             order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                            'bg-emerald-100 text-emerald-700'
+                            'bg-red-100 text-red-700'
                           }`}>
                             {order.status}
                           </Badge>
@@ -211,16 +396,37 @@ export function AdminDashboard() {
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Customer Details</p>
                           <p className="font-bold text-gray-900 text-sm">{order.address?.name}</p>
                           <p className="text-xs text-gray-500 font-medium mt-1">{order.address?.houseNumber}, {order.address?.landmark}</p>
-                          <p className="text-xs text-emerald-600 font-black mt-2">📞 {order.address?.phone}</p>
+                          <p className="text-xs text-red-600 font-black mt-2">📞 {order.address?.phone}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {order.items?.map((item: any, i: number) => (
                             <div key={i} className="bg-white border border-gray-100 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-sm">
                               <span className="text-xs font-bold text-gray-900">{item.name}</span>
-                              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-md">x{item.quantity}</span>
+                              <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 rounded-md">x{item.quantity}</span>
                             </div>
                           ))}
                         </div>
+                        {order.status === 'pending' && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Assign Delivery Partner</p>
+                            <div className="flex flex-wrap gap-2">
+                              {deliveryPartners.map(partner => (
+                                <Button 
+                                  key={partner.id}
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-red-100 text-red-600 hover:bg-red-50 font-bold rounded-xl text-[10px] h-8"
+                                  onClick={() => handleAssignDelivery(order.id, partner.uid)}
+                                >
+                                  {partner.displayName || partner.email}
+                                </Button>
+                              ))}
+                              {deliveryPartners.length === 0 && (
+                                <p className="text-[10px] text-gray-400 font-bold">No delivery partners available</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-col justify-between items-end gap-6">
                         <div className="text-right">
@@ -231,7 +437,7 @@ export function AdminDashboard() {
                           <div className="flex gap-2">
                             <Button 
                               size="sm" 
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl px-6 h-10 shadow-md active:scale-95 transition-all"
+                              className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl px-6 h-10 shadow-md active:scale-95 transition-all"
                               onClick={() => handleUpdateOrderStatus(order.id, 'delivered')}
                             >
                               <CheckCircle2 className="w-4 h-4 mr-2" /> Deliver
@@ -263,6 +469,180 @@ export function AdminDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+        
+        <TabsContent value="users" className="mt-0">
+          <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
+            <CardContent className="p-0">
+              <ScrollArea className="h-[600px]">
+                <div className="divide-y divide-gray-50">
+                  {users.map((user) => {
+                    const userOrders = orders.filter(o => o.userId === user.uid);
+                    const totalSpent = userOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+                    const totalItems = userOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0);
+
+                    return (
+                      <div key={user.id} className="p-6 hover:bg-gray-50/50 transition-colors flex flex-col md:flex-row justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center border border-red-100">
+                            <Users className="w-7 h-7 text-red-600" />
+                          </div>
+                          <div>
+                            <p className="font-black text-gray-900 tracking-tight text-lg">{user.displayName || 'Anonymous User'}</p>
+                            <p className="text-xs text-gray-400 font-bold">{user.email}</p>
+                            <p className="text-xs text-red-600 font-black mt-1">📞 {user.phoneNumber || 'No Number'}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge className="uppercase text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                {user.role || 'user'}
+                              </Badge>
+                              {user.isBlocked && (
+                                <Badge className="uppercase text-[9px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                                  Blocked
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col md:flex-row items-center gap-8">
+                          <div className="grid grid-cols-3 gap-8 text-right">
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Orders</p>
+                              <p className="text-xl font-black text-gray-900 tracking-tighter">{userOrders.length}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Items</p>
+                              <p className="text-xl font-black text-gray-900 tracking-tighter">{totalItems}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Spent</p>
+                              <p className="text-xl font-black text-red-700 tracking-tighter">₹{totalSpent}</p>
+                            </div>
+                          </div>
+
+                          {user.role !== 'admin' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={`rounded-xl font-black text-[10px] uppercase tracking-widest h-10 px-4 ${
+                                user.isBlocked 
+                                  ? 'border-green-200 text-green-600 hover:bg-green-50' 
+                                  : 'border-red-200 text-red-600 hover:bg-red-50'
+                              }`}
+                              onClick={() => handleToggleUserBlock(user.id, !!user.isBlocked)}
+                            >
+                              {user.isBlocked ? (
+                                <><UserCheck className="w-3 h-3 mr-2" /> Unblock</>
+                              ) : (
+                                <><Ban className="w-3 h-3 mr-2" /> Block User</>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {users.length === 0 && (
+                    <div className="py-32 text-center">
+                      <Users className="w-10 h-10 text-gray-200 mx-auto mb-4" />
+                      <p className="font-black text-gray-900">No users found</p>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="categories" className="mt-0">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <Card className="md:col-span-1 border-none shadow-sm rounded-3xl bg-white h-fit">
+              <CardHeader>
+                <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Add Category</CardTitle>
+                <CardDescription className="text-xs font-bold">Create a new product category</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleAddCategory} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category Name</Label>
+                    <Input 
+                      placeholder="e.g. Grains" 
+                      className="rounded-xl border-gray-100"
+                      value={newCategory.name}
+                      onChange={(e) => setNewCategory({...newCategory, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Icon (Emoji)</Label>
+                    <Input 
+                      placeholder="e.g. 🌾" 
+                      className="rounded-xl border-gray-100 text-2xl text-center"
+                      value={newCategory.icon}
+                      onChange={(e) => setNewCategory({...newCategory, icon: e.target.value})}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-black rounded-xl h-12">
+                    <Plus className="w-4 h-4 mr-2" /> Add Category
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2 border-none shadow-sm rounded-3xl bg-white">
+              <CardHeader>
+                <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Manage Categories</CardTitle>
+                <CardDescription className="text-xs font-bold">Edit or remove existing categories</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[500px]">
+                  <div className="divide-y divide-gray-50">
+                    {categories.map((cat) => (
+                      <div key={cat.id} className="p-6 flex items-center justify-between group">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-3xl border border-red-100 shadow-sm group-hover:scale-105 transition-transform">
+                            {cat.icon}
+                          </div>
+                          <div>
+                            <p className="font-black text-gray-900 tracking-tight text-lg">{cat.name}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                              {products.filter(p => p.category === cat.name).length} Products
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100">
+                            {['🌾', '🛢️', '🧼', '🌶️', '🥛', '🍪', '🍎', '🥩', '🍞'].map(emoji => (
+                              <button
+                                key={emoji}
+                                onClick={() => handleUpdateCategoryIcon(cat.id, emoji)}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white hover:shadow-sm transition-all ${cat.icon === emoji ? 'bg-white shadow-sm ring-1 ring-red-100' : ''}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl"
+                            onClick={() => handleDeleteCategory(cat.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {categories.length === 0 && (
+                      <div className="py-20 text-center">
+                        <LayoutGrid className="w-10 h-10 text-gray-200 mx-auto mb-4" />
+                        <p className="font-black text-gray-900">No categories found</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         <TabsContent value="inventory" className="mt-0">
           <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
@@ -283,9 +663,14 @@ export function AdminDashboard() {
                         <div className="flex-1 min-w-0">
                           <h4 className="font-black text-gray-900 tracking-tight leading-tight">{product.name}</h4>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{product.category}</p>
-                          <p className="text-xl font-black text-emerald-700 mt-2">₹{product.price}</p>
+                          <div className="flex items-baseline gap-2 mt-2">
+                            <p className="text-xl font-black text-red-700">₹{product.price}</p>
+                            {product.mrp && (
+                              <p className="text-[10px] font-bold text-gray-400 line-through">₹{product.mrp}</p>
+                            )}
+                          </div>
                           <Badge className={`mt-2 text-[10px] font-black uppercase tracking-widest ${
-                            product.status === 'available' ? 'bg-emerald-100 text-emerald-700' :
+                            product.status === 'available' ? 'bg-red-100 text-red-700' :
                             product.status === 'out_of_stock' ? 'bg-orange-100 text-orange-700' :
                             'bg-gray-100 text-gray-700'
                           }`}>
@@ -298,7 +683,7 @@ export function AdminDashboard() {
                         {product.status !== 'available' ? (
                           <Button 
                             size="sm" 
-                            className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest h-10"
+                            className="rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase tracking-widest h-10"
                             onClick={() => handleUpdateProductStatus(product.id, 'available')}
                           >
                             <RefreshCw className="w-3 h-3 mr-2" /> Restock
@@ -327,7 +712,7 @@ export function AdminDashboard() {
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-black text-[10px] uppercase tracking-widest h-10"
+                            className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest h-10"
                             onClick={() => handleUpdateProductStatus(product.id, 'available')}
                           >
                             <Eye className="w-3 h-3 mr-2" /> Show
@@ -362,29 +747,93 @@ export function AdminDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Product Name</Label>
-                    <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-emerald-500 h-12 font-bold" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} placeholder="e.g., Basmati Rice" />
+                    <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} placeholder="e.g., Basmati Rice" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Price (₹)</Label>
-                    <Input required type="number" className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-emerald-500 h-12 font-bold" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} placeholder="450" />
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selling Price (₹)</Label>
+                    <Input required type="number" className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} placeholder="450" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">MRP (₹) - Optional</Label>
+                    <Input type="number" className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.mrp} onChange={e => setNewProduct({...newProduct, mrp: e.target.value})} placeholder="500" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</Label>
-                    <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-emerald-500 h-12 font-bold" value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} placeholder="Grains" />
+                    <select 
+                      required 
+                      className="w-full rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold px-3 outline-none" 
+                      value={newProduct.category} 
+                      onChange={e => setNewProduct({...newProduct, category: e.target.value})}
+                    >
+                      <option value="">Select Category</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Image URL</Label>
-                    <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-emerald-500 h-12 font-bold" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} placeholder="https://..." />
+                    <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} placeholder="https://..." />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</Label>
-                  <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-emerald-500 h-12 font-bold" value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} placeholder="Product details..." />
+                  <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} placeholder="Product details..." />
                 </div>
-                <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-8 text-lg font-black rounded-2xl shadow-lg shadow-emerald-100 active:scale-95 transition-all" disabled={isAdding}>
+                <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white py-8 text-lg font-black rounded-2xl shadow-lg shadow-red-100 active:scale-95 transition-all" disabled={isAdding}>
                   {isAdding ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Plus className="w-6 h-6 mr-2" /> Add to Catalog</>}
                 </Button>
               </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bulk" className="mt-0">
+          <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white max-w-2xl mx-auto">
+            <CardHeader className="p-8 pb-4">
+              <CardTitle className="text-2xl font-black text-gray-900 tracking-tight">Bulk Upload Products</CardTitle>
+              <CardDescription className="font-bold text-gray-400">Upload a CSV file to add multiple products at once.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-8 pt-4 space-y-8">
+              <div className="bg-red-50 p-6 rounded-2xl border border-red-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-black text-red-900 uppercase tracking-widest text-xs">Instructions</h4>
+                  <Button variant="ghost" size="sm" onClick={downloadSampleCSV} className="text-red-600 hover:bg-red-100 font-bold text-[10px] uppercase tracking-widest h-8">
+                    <Download className="w-3 h-3 mr-2" /> Download Sample
+                  </Button>
+                </div>
+                <ul className="text-xs text-red-800 font-medium space-y-2 list-disc list-inside">
+                  <li>File must be in CSV format.</li>
+                  <li>Headers must be: <code className="bg-red-100 px-1 rounded">name,price,category,image,description</code></li>
+                  <li>Price must be a number.</li>
+                  <li>Image must be a valid URL.</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-100 rounded-3xl p-12 bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer relative group" onClick={() => fileInputRef.current?.click()}>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept=".csv" 
+                  onChange={handleBulkUpload}
+                  disabled={isBulkUploading}
+                />
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-4 group-hover:scale-110 transition-transform">
+                  {isBulkUploading ? <Loader2 className="w-8 h-8 animate-spin text-red-600" /> : <FileUp className="w-8 h-8 text-red-600" />}
+                </div>
+                <p className="font-black text-gray-900 tracking-tight">
+                  {isBulkUploading ? `Uploading ${bulkUploadProgress.current}/${bulkUploadProgress.total}...` : "Click to select CSV file"}
+                </p>
+                <p className="text-xs text-gray-400 font-bold mt-1">or drag and drop your file here</p>
+              </div>
+
+              {bulkUploadProgress.total > 0 && !isBulkUploading && bulkUploadProgress.current === bulkUploadProgress.total && (
+                <div className="flex items-center gap-3 bg-green-50 p-4 rounded-2xl border border-green-100 text-green-700">
+                  <Check className="w-5 h-5" />
+                  <p className="text-sm font-bold">Successfully uploaded {bulkUploadProgress.total} products!</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -69,7 +69,7 @@ export function Chatbot() {
     <>
       <Button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 rounded-full w-14 h-14 shadow-xl bg-emerald-600 hover:bg-emerald-700 z-50"
+        className="fixed bottom-6 right-6 rounded-full w-14 h-14 shadow-xl bg-red-600 hover:bg-red-700 z-50"
       >
         <MessageSquare className="w-6 h-6" />
       </Button>
@@ -82,18 +82,18 @@ export function Chatbot() {
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className="fixed bottom-24 right-6 w-[90vw] max-w-[400px] h-[500px] z-50"
           >
-            <Card className="flex flex-col h-full shadow-2xl border-emerald-100 overflow-hidden rounded-3xl">
-              <div className="p-4 bg-emerald-600 text-white flex justify-between items-center">
+            <Card className="flex flex-col h-full shadow-2xl border-red-100 overflow-hidden rounded-3xl">
+              <div className="p-4 bg-red-600 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Bot className="w-5 h-5" />
                   <span className="font-semibold">JMB Assistant</span>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-emerald-700">
+                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-red-700">
                   <X className="w-5 h-5" />
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1 p-4 bg-emerald-50/30" ref={scrollRef}>
+              <ScrollArea className="flex-1 p-4 bg-red-50/30" ref={scrollRef}>
                 <div className="space-y-6">
                   {messages.map((m, i) => (
                     <motion.div 
@@ -104,8 +104,8 @@ export function Chatbot() {
                     >
                       <div className={`max-w-[85%] p-4 shadow-lg transition-transform hover:scale-[1.02] ${
                         m.role === 'user' 
-                          ? 'bg-emerald-600 text-white rounded-3xl rounded-tr-none' 
-                          : 'bg-white text-gray-800 rounded-3xl rounded-tl-none border border-emerald-50'
+                          ? 'bg-red-600 text-white rounded-3xl rounded-tr-none' 
+                          : 'bg-white text-gray-800 rounded-3xl rounded-tl-none border border-red-50'
                       }`}>
                         <div className="prose prose-sm dark:prose-invert">
                           <Markdown>{m.text}</Markdown>
@@ -119,8 +119,8 @@ export function Chatbot() {
                       animate={{ opacity: 1, scale: 1 }}
                       className="flex justify-start"
                     >
-                      <div className="bg-white p-4 rounded-3xl rounded-tl-none border border-emerald-50 shadow-md">
-                        <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                      <div className="bg-white p-4 rounded-3xl rounded-tl-none border border-red-50 shadow-md">
+                        <Loader2 className="w-4 h-4 animate-spin text-red-600" />
                       </div>
                     </motion.div>
                   )}
@@ -136,9 +136,9 @@ export function Chatbot() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Ask something..."
-                    className="flex-1 bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500 rounded-2xl px-4 py-2 text-sm"
+                    className="flex-1 bg-gray-50 border-none focus:ring-2 focus:ring-red-500 rounded-2xl px-4 py-2 text-sm"
                   />
-                  <Button type="submit" size="icon" disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-700 rounded-xl">
+                  <Button type="submit" size="icon" disabled={isLoading} className="bg-red-600 hover:bg-red-700 rounded-xl">
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>

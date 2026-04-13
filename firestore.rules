@@ -57,22 +57,40 @@ service cloud.firestore {
          request.auth.token.email == "archanasharma993151@gmail.com");
     }
 
+    function isDeliveryPerson() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'delivery';
+    }
+
+    function isNotBlocked() {
+      return !isAuthenticated() || 
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isBlocked', false) == false;
+    }
+
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+      return data.keys().hasAll(['uid', 'email', 'role', 'phoneNumber', 'createdAt']) &&
              data.uid == request.auth.uid &&
              data.email == request.auth.token.email &&
-             data.role in ['user', 'admin'] &&
-             data.createdAt is timestamp;
+             data.phoneNumber is string &&
+             data.phoneNumber.matches("^[0-9]{10}$") &&
+             data.role in ['user', 'admin', 'delivery'] &&
+             data.createdAt is timestamp &&
+             (!('isBlocked' in data) || data.isBlocked is bool) &&
+             (!('location' in data) || (data.location is map && data.location.keys().hasAll(['lat', 'lng', 'updatedAt'])));
     }
 
     function isValidOrder(data) {
       return data.keys().hasAll(['userId', 'items', 'total', 'address', 'status', 'createdAt']) &&
-             data.userId == request.auth.uid &&
+             data.userId is string &&
              data.items is list &&
              data.total is number &&
              data.address is map &&
-             data.status in ['pending', 'cancelled', 'delivered'] &&
-             data.createdAt is timestamp;
+             data.status in ['pending', 'assigned', 'out_for_delivery', 'delivered', 'cancelled'] &&
+             data.createdAt is timestamp &&
+             (!('deliveryPersonId' in data) || data.deliveryPersonId is string) &&
+             (!('otp' in data) || (data.otp is string && data.otp.matches("^[0-9]{4}$")));
     }
 
     function isValidProduct(data) {
@@ -90,16 +108,23 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isAuthenticated() && isNotBlocked(); // Allow users to see delivery person info/location
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
                       (request.resource.data.role == 'user' || isAdmin());
-      allow update: if isAdmin() && isValidUser(request.resource.data);
+      allow update: if isAdmin() || 
+                      (isOwner(userId) && isNotBlocked() && isValidUser(request.resource.data) &&
+                       request.resource.data.role == resource.data.role &&
+                       request.resource.data.get('isBlocked', false) == resource.data.get('isBlocked', false));
     }
 
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && isValidOrder(request.resource.data);
-      allow update: if isAdmin() || (isOwner(resource.data.userId) && request.resource.data.status == 'cancelled' && resource.data.status == 'pending');
+      allow read: if isAuthenticated() && isNotBlocked() && (resource.data.userId == request.auth.uid || isAdmin() || resource.data.deliveryPersonId == request.auth.uid);
+      allow create: if isAuthenticated() && isNotBlocked() && isValidOrder(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || 
+                      (isOwner(resource.data.userId) && isNotBlocked() && request.resource.data.status == 'cancelled' && resource.data.status == 'pending') ||
+                      (isDeliveryPerson() && isNotBlocked() && resource.data.deliveryPersonId == request.auth.uid && 
+                       ((request.resource.data.status == 'out_for_delivery' && resource.data.status == 'assigned') ||
+                        (request.resource.data.status == 'delivered' && resource.data.status == 'out_for_delivery' && request.resource.data.otp == resource.data.otp)));
       allow delete: if isAdmin();
     }
 
@@ -108,6 +133,23 @@ service cloud.firestore {
       allow create: if isAdmin() && isValidProduct(request.resource.data);
       allow update: if isAdmin() && isValidProduct(request.resource.data);
       allow delete: if isAdmin();
+    }
+
+    match /carts/{userId} {
+      allow read, write: if isOwner(userId) && isNotBlocked();
+    }
+
+    match /phoneNumbers/{phoneNumber} {
+      allow read: if isAuthenticated() && isNotBlocked();
+      allow create: if isAuthenticated() && isNotBlocked() && 
+                      request.resource.data.uid == request.auth.uid &&
+                      phoneNumber.matches("^[0-9]{10}$");
+      allow update, delete: if false; // Phone numbers are immutable once linked
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

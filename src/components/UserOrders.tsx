@@ -1,18 +1,29 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/src/lib/firebase";
-import { collection, query, where, onSnapshot, updateDoc, doc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, updateDoc, doc, getDoc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Package, XCircle, Clock, CheckCircle2, Loader2, ShoppingBag } from "lucide-react";
+import { Package, XCircle, Clock, CheckCircle2, Loader2, ShoppingBag, Phone, Navigation, KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function UserOrders() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [deliveryLocations, setDeliveryLocations] = useState<{[key: string]: any}>({});
 
   useEffect(() => {
     if (!auth.currentUser) return;
+
+    const fetchProfile = async () => {
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser!.uid));
+      if (userDoc.exists()) {
+        setUserProfile(userDoc.data());
+      }
+    };
+    fetchProfile();
 
     const q = query(
       collection(db, "orders"),
@@ -22,6 +33,23 @@ export function UserOrders() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setOrders(ordersData);
+      setIsLoading(false);
+
+      // Fetch delivery person locations for active orders
+      ordersData.forEach((order: any) => {
+        if (order.deliveryPersonId && (order.status === 'assigned' || order.status === 'out_for_delivery')) {
+          onSnapshot(doc(db, "users", order.deliveryPersonId), (userDoc) => {
+            if (userDoc.exists()) {
+              setDeliveryLocations(prev => ({
+                ...prev,
+                [order.deliveryPersonId]: userDoc.data().location
+              }));
+            }
+          });
+        }
+      });
+    }, (error) => {
+      console.error("Orders snapshot error:", error);
       setIsLoading(false);
     });
 
@@ -42,7 +70,7 @@ export function UserOrders() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-red-600" />
         <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Fetching your orders...</p>
       </div>
     );
@@ -51,12 +79,17 @@ export function UserOrders() {
   return (
     <div className="max-w-2xl mx-auto pb-20">
       <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center">
-          <Package className="w-6 h-6 text-emerald-600" />
+        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+          <Package className="w-6 h-6 text-red-600" />
         </div>
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tighter">My Orders</h1>
           <p className="text-gray-400 font-bold text-sm">Track and manage your recent purchases.</p>
+          {userProfile && (
+            <p className="text-xs text-red-600 font-black mt-1 flex items-center gap-1">
+              <Phone className="w-3 h-3" /> Connected: {userProfile.phoneNumber}
+            </p>
+          )}
         </div>
       </div>
       
@@ -79,12 +112,53 @@ export function UserOrders() {
                   </div>
                   <Badge className={`uppercase text-[10px] font-black px-3 py-1 rounded-full ${
                     order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                    order.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
+                    order.status === 'out_for_delivery' ? 'bg-purple-100 text-purple-700' :
                     order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                    'bg-emerald-100 text-emerald-700'
+                    'bg-red-100 text-red-700'
                   }`}>
-                    {order.status}
+                    {order.status.replace(/_/g, ' ')}
                   </Badge>
                 </div>
+
+                {order.status === 'out_for_delivery' && order.otp && (
+                  <div className="mt-4 bg-red-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-red-100">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Delivery OTP</p>
+                      <p className="text-2xl font-black tracking-[0.3em]">{order.otp}</p>
+                    </div>
+                    <div className="text-right">
+                      <KeyRound className="w-8 h-8 opacity-20" />
+                      <p className="text-[9px] font-bold mt-1 max-w-[120px]">Share this code with delivery partner only</p>
+                    </div>
+                  </div>
+                )}
+
+                {order.deliveryPersonId && (order.status === 'assigned' || order.status === 'out_for_delivery') && (
+                  <div className="mt-4 bg-blue-50 border border-blue-100 p-4 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Navigation className="w-4 h-4 text-blue-600 animate-pulse" />
+                        <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Live Tracking</p>
+                      </div>
+                      {deliveryLocations[order.deliveryPersonId] && (
+                        <a 
+                          href={`https://www.google.com/maps?q=${deliveryLocations[order.deliveryPersonId].lat},${deliveryLocations[order.deliveryPersonId].lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-black text-blue-600 underline"
+                        >
+                          View on Map
+                        </a>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-blue-600 font-bold">
+                      {order.status === 'out_for_delivery' 
+                        ? "Your delivery partner is on the way!" 
+                        : "Delivery partner assigned and preparing for pickup."}
+                    </p>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-6 pt-4">
                 <div className="bg-gray-50/50 rounded-2xl p-4 space-y-3 border border-gray-50">
@@ -92,7 +166,7 @@ export function UserOrders() {
                     <div key={i} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-gray-900">{item.name}</span>
-                        <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-md">x{item.quantity}</span>
+                        <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 rounded-md">x{item.quantity}</span>
                       </div>
                       <span className="font-black text-gray-900">₹{item.price * item.quantity}</span>
                     </div>
@@ -102,7 +176,7 @@ export function UserOrders() {
                 <div className="flex justify-between items-center mt-6">
                   <div>
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Paid</p>
-                    <p className="text-2xl font-black text-emerald-700 tracking-tighter">₹{order.total}</p>
+                    <p className="text-2xl font-black text-red-700 tracking-tighter">₹{order.total}</p>
                   </div>
                   <div className="flex gap-2">
                     {order.status === 'pending' && (
@@ -119,7 +193,7 @@ export function UserOrders() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="border-emerald-100 text-emerald-600 hover:bg-emerald-50 font-black rounded-xl px-4 h-10"
+                      className="border-red-100 text-red-600 hover:bg-red-50 font-black rounded-xl px-4 h-10"
                     >
                       Need Help?
                     </Button>
@@ -136,7 +210,7 @@ export function UserOrders() {
               <h3 className="text-xl font-black text-gray-900 tracking-tight">No orders yet</h3>
               <p className="text-sm text-gray-400 font-bold mt-1">Your order history will appear here.</p>
               <Button 
-                className="mt-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl px-8 h-12 shadow-lg shadow-emerald-50"
+                className="mt-8 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl px-8 h-12 shadow-lg shadow-red-50"
                 onClick={() => window.location.reload()}
               >
                 Start Shopping

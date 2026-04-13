@@ -21,10 +21,10 @@ const VALID_PINCODE = "814152";
 
 export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProps) {
   const [formData, setFormData] = useState({
-    name: '',
+    name: user?.displayName || '',
     houseNumber: '',
     village: 'JMB Village',
-    phone: '',
+    phone: user?.phoneNumber || '',
     pincode: '',
     landmark: ''
   });
@@ -117,7 +117,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: "spring", damping: 12 }}
-          className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-8 shadow-lg shadow-emerald-50"
+          className="w-24 h-24 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center mb-8 shadow-lg shadow-sky-50"
         >
           <CheckCircle2 className="w-12 h-12" />
         </motion.div>
@@ -125,9 +125,9 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
         <p className="text-gray-500 font-medium max-w-xs mx-auto mb-8">
           Namaste, {formData.name}. Your order is being packed and will reach you in 10 minutes.
         </p>
-        <div className="w-full max-w-xs bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Delivery Address</p>
-          <p className="text-sm font-bold text-emerald-900">{formData.houseNumber}</p>
+        <div className="w-full max-w-xs bg-sky-50 p-4 rounded-2xl border border-sky-100">
+          <p className="text-[10px] font-black text-sky-600 uppercase tracking-widest mb-1">Delivery Address</p>
+          <p className="text-sm font-bold text-sky-900">{formData.houseNumber}</p>
         </div>
       </div>
     );
@@ -136,7 +136,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
   return (
     <div className="max-w-2xl mx-auto pb-20">
       <div className="flex items-center gap-4 mb-8">
-        <Button variant="ghost" onClick={onBack} size="icon" className="rounded-full hover:bg-emerald-50 text-emerald-600">
+        <Button variant="ghost" onClick={onBack} size="icon" className="rounded-full hover:bg-sky-50 text-sky-600">
           <ArrowLeft className="w-6 h-6" />
         </Button>
         <h1 className="text-2xl font-black text-gray-900 tracking-tight">Checkout</h1>
@@ -146,8 +146,8 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
         <div className="space-y-6">
           <section className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <MapPin className="w-4 h-4 text-emerald-600" />
+              <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
+                <MapPin className="w-4 h-4 text-sky-600" />
               </div>
               <h2 className="font-black text-gray-900 tracking-tight uppercase text-xs">Delivery Address</h2>
             </div>
@@ -158,7 +158,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                   <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Full Name</Label>
                   <Input 
                     required 
-                    className="bg-white border-gray-100 rounded-xl focus:ring-emerald-500"
+                    className="bg-white border-gray-100 rounded-xl focus:ring-sky-500"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
@@ -171,7 +171,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                       type="button"
                       onClick={handleGetLocation}
                       disabled={isLocating}
-                      className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1"
+                      className="text-[10px] font-black text-sky-600 uppercase tracking-widest flex items-center gap-1"
                     >
                       {isLocating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
                       Auto Detect
@@ -179,7 +179,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                   </div>
                   <Input 
                     required 
-                    className="bg-white border-gray-100 rounded-xl focus:ring-emerald-500"
+                    className="bg-white border-gray-100 rounded-xl focus:ring-sky-500"
                     value={formData.houseNumber}
                     onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
                   />
@@ -191,7 +191,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                     <Input 
                       required 
                       placeholder="814152"
-                      className={`bg-white border-gray-100 rounded-xl focus:ring-emerald-500 ${formData.pincode && formData.pincode !== VALID_PINCODE ? "border-red-500" : ""}`}
+                      className={`bg-white border-gray-100 rounded-xl focus:ring-sky-500 ${formData.pincode && formData.pincode !== VALID_PINCODE ? "border-red-500" : ""}`}
                       value={formData.pincode}
                       onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
                     />
@@ -201,7 +201,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                     <Input 
                       required 
                       type="tel"
-                      className="bg-white border-gray-100 rounded-xl focus:ring-emerald-500"
+                      className="bg-white border-gray-100 rounded-xl focus:ring-sky-500"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     />
@@ -215,8 +215,8 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
         <div className="space-y-6">
           <section className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <IndianRupee className="w-4 h-4 text-emerald-600" />
+              <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
+                <IndianRupee className="w-4 h-4 text-sky-600" />
               </div>
               <h2 className="font-black text-gray-900 tracking-tight uppercase text-xs">Payment Summary</h2>
             </div>
@@ -228,7 +228,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                     <span>Subtotal</span>
                     <span>₹{total}</span>
                   </div>
-                  <div className="flex justify-between text-sm font-bold text-emerald-600">
+                  <div className="flex justify-between text-sm font-bold text-sky-600">
                     <span>Delivery Fee</span>
                     <span>FREE</span>
                   </div>
@@ -239,9 +239,9 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                   </div>
                 </div>
 
-                <div className="bg-emerald-600/5 p-4 rounded-xl border border-emerald-100 flex items-center gap-3">
+                <div className="bg-sky-600/5 p-4 rounded-xl border border-sky-100 flex items-center gap-3">
                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                    <IndianRupee className="w-5 h-5 text-emerald-600" />
+                    <IndianRupee className="w-5 h-5 text-sky-600" />
                   </div>
                   <div>
                     <p className="text-xs font-black text-gray-900">Cash on Delivery</p>
@@ -252,7 +252,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                 <Button 
                   onClick={handleSubmit}
                   disabled={isSubmitting}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-8 text-lg font-black rounded-2xl shadow-lg shadow-emerald-100 active:scale-95 transition-all mt-4"
+                  className="w-full bg-sky-600 hover:bg-sky-700 text-white py-8 text-lg font-black rounded-2xl shadow-lg shadow-sky-100 active:scale-95 transition-all mt-4"
                 >
                   {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : `Pay ₹${total}`}
                 </Button>

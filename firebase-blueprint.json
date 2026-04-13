@@ -8,10 +8,19 @@
         "uid": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "displayName": { "type": "string" },
-        "role": { "type": "string", "enum": ["user", "admin"] },
+        "phoneNumber": { "type": "string", "description": "Mandatory unique mobile number" },
+        "role": { "type": "string", "enum": ["user", "admin", "delivery"] },
+        "location": { 
+          "type": "object", 
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "updatedAt": { "type": "string", "format": "date-time" }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "email", "role"]
+      "required": ["uid", "email", "role", "phoneNumber"]
     },
     "orders": {
       "title": "Order",
@@ -23,7 +32,9 @@
         "total": { "type": "number" },
         "address": { "type": "object" },
         "landmark": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "cancelled", "delivered"] },
+        "status": { "type": "string", "enum": ["pending", "assigned", "out_for_delivery", "delivered", "cancelled"] },
+        "deliveryPersonId": { "type": "string" },
+        "otp": { "type": "string", "description": "4-digit OTP for delivery verification" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "items", "total", "address", "status", "createdAt"]
@@ -56,6 +67,14 @@
     "/products/{productId}": {
       "schema": "products",
       "description": "Product documents"
+    },
+    "/carts/{userId}": {
+      "schema": "object",
+      "description": "User shopping carts"
+    },
+    "/phoneNumbers/{phoneNumber}": {
+      "schema": "object",
+      "description": "Mapping of phone numbers to user UIDs to ensure uniqueness"
     }
   }
 }

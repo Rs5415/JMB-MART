@@ -21,8 +21,8 @@ export function Cart({ items, onUpdateQuantity, onRemove, onCheckout }: CartProp
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400 gap-4">
-        <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center">
-          <ShoppingBag className="w-10 h-10 text-emerald-200" />
+        <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center">
+          <ShoppingBag className="w-10 h-10 text-red-200" />
         </div>
         <div className="text-center">
           <p className="text-lg font-black text-gray-900">Your cart is empty</p>
@@ -36,8 +36,8 @@ export function Cart({ items, onUpdateQuantity, onRemove, onCheckout }: CartProp
     <div className="flex flex-col h-full bg-gray-50/50">
       <div className="bg-white p-4 mb-2 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
-            <Clock className="w-5 h-5 text-emerald-600" />
+          <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+            <Clock className="w-5 h-5 text-red-600" />
           </div>
           <div>
             <p className="text-sm font-black text-gray-900 leading-none">Delivery in 10 mins</p>
@@ -56,14 +56,14 @@ export function Cart({ items, onUpdateQuantity, onRemove, onCheckout }: CartProp
               <div className="flex-1 min-w-0">
                 <h4 className="font-bold text-xs text-gray-900 truncate leading-tight">{item.name}</h4>
                 <p className="text-[10px] text-gray-400 font-medium mt-0.5">{item.category}</p>
-                <p className="text-xs font-black text-emerald-700 mt-1">₹{item.price}</p>
+                <p className="text-xs font-black text-red-700 mt-1">₹{item.price}</p>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center bg-emerald-600 text-white rounded-lg h-8 px-1 shadow-sm">
+                <div className="flex items-center bg-red-600 text-white rounded-lg h-8 px-1 shadow-sm">
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-6 w-6 text-white hover:bg-emerald-700 hover:text-white"
+                    className="h-6 w-6 text-white hover:bg-red-700 hover:text-white"
                     onClick={() => onUpdateQuantity(item.id, -1)}
                   >
                     <Minus className="w-3 h-3" />
@@ -72,7 +72,7 @@ export function Cart({ items, onUpdateQuantity, onRemove, onCheckout }: CartProp
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-6 w-6 text-white hover:bg-emerald-700 hover:text-white"
+                    className="h-6 w-6 text-white hover:bg-red-700 hover:text-white"
                     onClick={() => onUpdateQuantity(item.id, 1)}
                   >
                     <Plus className="w-3 h-3" />
@@ -96,7 +96,7 @@ export function Cart({ items, onUpdateQuantity, onRemove, onCheckout }: CartProp
             <span>Item Total</span>
             <span>₹{total}</span>
           </div>
-          <div className="flex justify-between items-center text-xs font-bold text-emerald-600">
+          <div className="flex justify-between items-center text-xs font-bold text-red-600">
             <span>Delivery Fee</span>
             <span className="line-through text-gray-400 mr-2">₹25</span>
             <span>FREE</span>
@@ -108,7 +108,7 @@ export function Cart({ items, onUpdateQuantity, onRemove, onCheckout }: CartProp
           </div>
         </div>
         <Button 
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-7 text-base font-black rounded-2xl shadow-lg shadow-emerald-100 active:scale-95 transition-all flex justify-between px-6"
+          className="w-full bg-red-600 hover:bg-red-700 text-white py-7 text-base font-black rounded-2xl shadow-lg shadow-red-100 active:scale-95 transition-all flex justify-between px-6"
           onClick={onCheckout}
         >
           <span>₹{total}</span>
