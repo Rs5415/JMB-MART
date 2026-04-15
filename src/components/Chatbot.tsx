@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Loader2, X, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import Markdown from "react-markdown";
 import { motion, AnimatePresence } from "motion/react";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-1.5-flash",
+  systemInstruction: "You are a helpful and friendly assistant for JMB MART, a village grocery store. You help users find products like rice, oil, soap, and pulses. You are polite, use simple language, and sometimes use Hindi words like 'Namaste', 'Ji', 'Dhanyawad'. Keep responses concise and helpful for village users.",
+});
 
 interface Message {
   role: 'user' | 'model';
@@ -38,24 +42,19 @@ export function Chatbot() {
     setIsLoading(true);
 
     try {
-      const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
-        config: {
-          systemInstruction: "You are a helpful and friendly assistant for JMB MART, a village grocery store. You help users find products like rice, oil, soap, and pulses. You are polite, use simple language, and sometimes use Hindi words like 'Namaste', 'Ji', 'Dhanyawad'. Keep responses concise and helpful for village users.",
-        }
-      });
-
       const history = messages.map(m => ({
-        role: m.role,
+        role: m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.text }]
       }));
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [...history, { role: 'user', parts: [{ text: userMessage }] }],
+      const chat = model.startChat({
+        history: history,
       });
 
-      const botResponse = response.text || "I'm sorry, I couldn't understand that. Please try again.";
+      const result = await chat.sendMessage(userMessage);
+      const response = await result.response;
+      const botResponse = response.text() || "I'm sorry, I couldn't understand that. Please try again.";
+      
       setMessages(prev => [...prev, { role: 'model', text: botResponse }]);
     } catch (error) {
       console.error("Chat error:", error);

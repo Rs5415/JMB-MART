@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Product } from "@/src/data/products";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ interface ProductCardProps {
   onAddToCart: (product: Product) => void;
 }
 
-export function ProductCard({ product, onAddToCart }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product, onAddToCart }: ProductCardProps) {
   const isOutOfStock = product.status === 'out_of_stock';
   const isAvailable = product.status === 'available' || !product.status;
   const discount = product.mrp ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
@@ -61,4 +62,4 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
       </CardContent>
     </Card>
   );
-}
+});

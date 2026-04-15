@@ -45,22 +45,30 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
 
     // Location Tracking
     let watchId: number;
+    let lastUpdate = 0;
+    const UPDATE_INTERVAL = 10000; // 10 seconds
+
     if ("geolocation" in navigator) {
       watchId = navigator.geolocation.watchPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
           setCurrentLocation({ lat: latitude, lng: longitude });
-          try {
-            const userRef = doc(db, "users", auth.currentUser!.uid);
-            await updateDoc(userRef, {
-              location: {
-                lat: latitude,
-                lng: longitude,
-                updatedAt: serverTimestamp()
-              }
-            });
-          } catch (err) {
-            console.error("Error updating location:", err);
+          
+          const now = Date.now();
+          if (now - lastUpdate > UPDATE_INTERVAL) {
+            lastUpdate = now;
+            try {
+              const userRef = doc(db, "users", auth.currentUser!.uid);
+              await updateDoc(userRef, {
+                location: {
+                  lat: latitude,
+                  lng: longitude,
+                  updatedAt: serverTimestamp()
+                }
+              });
+            } catch (err) {
+              console.error("Error updating location:", err);
+            }
           }
         },
         (err) => console.error("Geolocation error:", err),

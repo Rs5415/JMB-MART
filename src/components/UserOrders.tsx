@@ -34,20 +34,6 @@ export function UserOrders() {
       const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setOrders(ordersData);
       setIsLoading(false);
-
-      // Fetch delivery person locations for active orders
-      ordersData.forEach((order: any) => {
-        if (order.deliveryPersonId && (order.status === 'assigned' || order.status === 'out_for_delivery')) {
-          onSnapshot(doc(db, "users", order.deliveryPersonId), (userDoc) => {
-            if (userDoc.exists()) {
-              setDeliveryLocations(prev => ({
-                ...prev,
-                [order.deliveryPersonId]: userDoc.data().location
-              }));
-            }
-          });
-        }
-      });
     }, (error) => {
       console.error("Orders snapshot error:", error);
       setIsLoading(false);
@@ -55,6 +41,31 @@ export function UserOrders() {
 
     return () => unsubscribe();
   }, []);
+
+  // Separate effect for delivery locations to manage listeners properly
+  useEffect(() => {
+    const activeDeliveryIds = Array.from(new Set(
+      orders
+        .filter(o => o.deliveryPersonId && (o.status === 'assigned' || o.status === 'out_for_delivery'))
+        .map(o => o.deliveryPersonId)
+    ));
+
+    const unsubscribes: (() => void)[] = [];
+
+    activeDeliveryIds.forEach(id => {
+      const unsub = onSnapshot(doc(db, "users", id), (userDoc) => {
+        if (userDoc.exists()) {
+          setDeliveryLocations(prev => ({
+            ...prev,
+            [id]: userDoc.data().location
+          }));
+        }
+      });
+      unsubscribes.push(unsub);
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [orders]);
 
   const handleCancelOrder = async (orderId: string) => {
     try {

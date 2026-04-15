@@ -116,26 +116,37 @@ export function Navbar({ cartCount, onSearch, onOpenCart, userRole, userProfile,
 
           {/* Actions */}
           <div className="flex items-center gap-2 shrink-0">
-            {!isSpecialView && (
+            {isSpecialView ? (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => onSearch('')} 
+                className="border-white/20 text-white hover:bg-white/10 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
+              >
+                Go to Shop
+              </Button>
+            ) : (
               <>
                 {userRole === 'admin' && (
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => onSearch('admin')} // This triggers the admin redirect in App.tsx
-                    className="hidden lg:flex border-red-200 text-red-600 hover:bg-red-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
+                    onClick={() => onSearch('admin')} 
+                    className="flex border-red-200 text-red-600 hover:bg-red-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
                   >
-                    <ShieldCheck className="w-4 h-4 mr-2" /> Admin Panel
+                    <ShieldCheck className="w-4 h-4 md:mr-2" /> 
+                    <span className="hidden md:inline">Admin Panel</span>
                   </Button>
                 )}
                 {userRole === 'delivery' && (
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => onSearch('delivery-dashboard')} // We'll handle this in App.tsx
-                    className="hidden lg:flex border-blue-200 text-blue-600 hover:bg-blue-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
+                    onClick={() => onSearch('delivery-dashboard')} 
+                    className="flex border-blue-200 text-blue-600 hover:bg-blue-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
                   >
-                    <Navigation className="w-4 h-4 mr-2" /> Delivery Panel
+                    <Navigation className="w-4 h-4 md:mr-2" /> 
+                    <span className="hidden md:inline">Delivery Panel</span>
                   </Button>
                 )}
                 {userProfile ? (
@@ -150,6 +161,7 @@ export function Navbar({ cartCount, onSearch, onOpenCart, userRole, userProfile,
                   <Button 
                     variant="ghost" 
                     className="hidden md:flex font-bold text-gray-700 hover:text-red-600"
+                    onClick={() => onSearch('auth')}
                   >
                     Login
                   </Button>
@@ -159,10 +171,11 @@ export function Navbar({ cartCount, onSearch, onOpenCart, userRole, userProfile,
                   onClick={onOpenCart}
                 >
                   <ShoppingCart className="w-5 h-5" />
-                  <div className="flex flex-col items-start leading-none">
+                  <div className="hidden sm:flex flex-col items-start leading-none">
                     <span className="text-[10px] opacity-80 uppercase tracking-wider">My Cart</span>
                     <span className="text-sm">{cartCount} {cartCount === 1 ? 'Item' : 'Items'}</span>
                   </div>
+                  <span className="sm:hidden text-sm font-black">{cartCount}</span>
                 </Button>
               </>
             )}

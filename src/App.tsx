@@ -104,58 +104,63 @@ export default function App() {
   }, []);
 
   const fetchUserProfile = async (uid: string) => {
-    const userDocRef = doc(db, "users", uid);
-    const userDoc = await getDoc(userDocRef);
-    
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      setUserProfile(userData);
-      const role = userData.role;
-      setUserRole(role);
+    try {
+      const userDocRef = doc(db, "users", uid);
+      const userDoc = await getDoc(userDocRef);
       
-      if (userData.isBlocked) {
-        setCurrentPage('blocked');
-        setIsAuthLoading(false);
-        return;
-      }
-      
-      // Force phone number connection if missing
-      if (!userData.phoneNumber) {
-        setCurrentPage('auth');
-      } else {
-        // Role based routing
-        if (role === 'admin') {
-          setCurrentPage('admin');
-        } else if (role === 'delivery') {
-          setCurrentPage('delivery');
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setUserProfile(userData);
+        const role = userData.role;
+        setUserRole(role);
+        
+        if (userData.isBlocked) {
+          setCurrentPage('blocked');
+          return;
+        }
+        
+        // Force phone number connection if missing
+        if (!userData.phoneNumber) {
+          setCurrentPage('auth');
         } else {
-          // Standard user stays on home or current page unless it's restricted
-          if (currentPage === 'admin' || currentPage === 'delivery') {
-            setCurrentPage('home');
+          // Role based routing - only if we are on a restricted page or home
+          if (currentPage === 'home' || currentPage === 'auth' || currentPage === 'admin' || currentPage === 'delivery') {
+            if (role === 'admin') {
+              setCurrentPage('admin');
+            } else if (role === 'delivery') {
+              setCurrentPage('delivery');
+            } else {
+              if (currentPage === 'admin' || currentPage === 'delivery') {
+                setCurrentPage('home');
+              }
+            }
           }
         }
-      }
 
-      // Load cart from Firestore
-      const cartDoc = await getDoc(doc(db, "carts", uid));
-      if (cartDoc.exists()) {
-        const firestoreCart = cartDoc.data().items || [];
-        if (firestoreCart.length > 0) {
-          setCart(firestoreCart);
+        // Load cart from Firestore
+        const cartDoc = await getDoc(doc(db, "carts", uid));
+        if (cartDoc.exists()) {
+          const firestoreCart = cartDoc.data().items || [];
+          if (firestoreCart.length > 0) {
+            setCart(firestoreCart);
+          }
         }
+      } else {
+        // If no doc exists, we must go to auth to complete profile (phone number)
+        setCurrentPage('auth');
       }
-    } else {
-      // If no doc exists, we must go to auth to complete profile (phone number)
-      setCurrentPage('auth');
+    } catch (err) {
+      console.error("Error fetching user profile:", err);
     }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
       if (currentUser) {
+        setUser(currentUser);
         await fetchUserProfile(currentUser.uid);
       } else {
+        setUser(null);
         setUserRole(null);
         setUserProfile(null);
         setCurrentPage('home');
@@ -166,19 +171,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (searchQuery.toLowerCase() === 'admin' && currentPage !== 'admin') {
+    const q = searchQuery.toLowerCase();
+    if (q === 'admin' && currentPage !== 'admin') {
       if (!user || userRole !== 'admin') {
         setCurrentPage('auth');
       } else {
         setCurrentPage('admin');
       }
-    }
-    if (searchQuery.toLowerCase() === 'delivery-dashboard' && currentPage !== 'delivery') {
+    } else if (q === 'delivery-dashboard' && currentPage !== 'delivery') {
       if (!user || userRole !== 'delivery') {
         setCurrentPage('auth');
       } else {
         setCurrentPage('delivery');
       }
+    } else if (q === '' && (currentPage === 'admin' || currentPage === 'delivery' || currentPage === 'orders')) {
+      setCurrentPage('home');
     }
   }, [searchQuery, user, userRole, currentPage]);
 
@@ -276,7 +283,7 @@ export default function App() {
         ) : currentPage === 'home' ? (
           <div className="space-y-8">
             {/* Sliding Banner */}
-            {!searchQuery && <SlidingBanner />}
+            {!searchQuery && <SlidingBanner onAction={setSearchQuery} />}
 
             {/* Category Section */}
             {!searchQuery && (

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup, Users, FileUp, Download, Check, Ban, UserCheck, LayoutGrid, Tag } from "lucide-react";
+import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup, Users, FileUp, Download, Check, Ban, UserCheck, LayoutGrid, Tag, MapPin, Navigation } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ImageGenerator } from "@/src/components/ImageGenerator";
 import { Badge } from "@/components/ui/badge";
@@ -386,12 +386,51 @@ export function AdminDashboard() {
                           </div>
                           <Badge className={`uppercase text-[10px] font-black px-3 py-1 rounded-full ${
                             order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                            order.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
+                            order.status === 'out_for_delivery' ? 'bg-purple-100 text-purple-700' :
+                            order.status === 'delivered' ? 'bg-green-100 text-green-700' :
                             order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
                             'bg-red-100 text-red-700'
                           }`}>
-                            {order.status}
+                            {order.status.replace(/_/g, ' ')}
                           </Badge>
                         </div>
+
+                        {order.deliveryPersonId && (
+                          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                            <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest mb-2 flex items-center gap-1">
+                              <Navigation className="w-3 h-3" /> Delivery Partner
+                            </p>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-bold text-gray-900 text-sm">
+                                  {deliveryPartners.find(p => p.uid === order.deliveryPersonId)?.displayName || 
+                                   deliveryPartners.find(p => p.uid === order.deliveryPersonId)?.email || 
+                                   'Unknown Partner'}
+                                </p>
+                                {deliveryPartners.find(p => p.uid === order.deliveryPersonId)?.location && (
+                                  <p className="text-[10px] text-blue-600 font-bold mt-1">
+                                    Last updated: {deliveryPartners.find(p => p.uid === order.deliveryPersonId)?.location?.updatedAt?.toDate().toLocaleTimeString()}
+                                  </p>
+                                )}
+                              </div>
+                              {deliveryPartners.find(p => p.uid === order.deliveryPersonId)?.location && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-blue-200 text-blue-600 hover:bg-blue-100 rounded-xl font-black text-[10px] h-8"
+                                  onClick={() => {
+                                    const loc = deliveryPartners.find(p => p.uid === order.deliveryPersonId)?.location;
+                                    if (loc) window.open(`https://www.google.com/maps?q=${loc.lat},${loc.lng}`, '_blank');
+                                  }}
+                                >
+                                  <MapPin className="w-3 h-3 mr-1" /> View Location
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Customer Details</p>
                           <p className="font-bold text-gray-900 text-sm">{order.address?.name}</p>

@@ -11,7 +11,8 @@ const banners = [
     description: "Limited time deal on premium quality onions.",
     color: "bg-red-600",
     icon: <Sparkles className="w-6 h-6" />,
-    image: "https://images.unsplash.com/photo-1508747703725-719777637510?auto=format&fit=crop&q=80&w=800"
+    image: "https://images.unsplash.com/photo-1508747703725-719777637510?auto=format&fit=crop&q=80&w=800",
+    searchQuery: "onion"
   },
   {
     id: 2,
@@ -21,7 +22,8 @@ const banners = [
     description: "Lowest price ever on anything that you want. Shop now!",
     color: "bg-gray-900",
     icon: <Zap className="w-6 h-6" />,
-    image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800"
+    image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800",
+    searchQuery: ""
   },
   {
     id: 3,
@@ -31,11 +33,12 @@ const banners = [
     description: "Get up to 60% off on every order you have placed in your account.",
     color: "bg-red-800",
     icon: <Percent className="w-6 h-6" />,
-    image: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&q=80&w=800"
+    image: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&q=80&w=800",
+    searchQuery: "discount"
   }
 ];
 
-export function SlidingBanner() {
+export function SlidingBanner({ onAction }: { onAction: (query: string) => void }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -45,8 +48,15 @@ export function SlidingBanner() {
     return () => clearInterval(timer);
   }, []);
 
+  const handleBannerClick = () => {
+    onAction(banners[currentIndex].searchQuery);
+  };
+
   return (
-    <div className="relative w-full h-[240px] md:h-[320px] overflow-hidden rounded-[32px] shadow-2xl shadow-red-100">
+    <div 
+      className="relative w-full h-[240px] md:h-[320px] overflow-hidden rounded-[32px] shadow-2xl shadow-red-100 cursor-pointer group"
+      onClick={handleBannerClick}
+    >
       <AnimatePresence mode="wait">
         <motion.div
           key={currentIndex}
@@ -61,7 +71,7 @@ export function SlidingBanner() {
             <img 
               src={banners[currentIndex].image} 
               alt={banners[currentIndex].title}
-              className="w-full h-full object-cover opacity-30 scale-110"
+              className="w-full h-full object-cover opacity-30 scale-110 group-hover:scale-125 transition-transform duration-1000"
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
@@ -114,6 +124,10 @@ export function SlidingBanner() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="flex items-center gap-2 bg-white text-gray-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-gray-100 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBannerClick();
+              }}
             >
               Shop Now <ArrowRight className="w-4 h-4" />
             </motion.button>
@@ -126,7 +140,10 @@ export function SlidingBanner() {
         {banners.map((_, index) => (
           <button
             key={index}
-            onClick={() => setCurrentIndex(index)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setCurrentIndex(index);
+            }}
             className={`h-1.5 rounded-full transition-all duration-300 ${
               index === currentIndex ? "w-8 bg-white" : "w-1.5 bg-white/40"
             }`}
