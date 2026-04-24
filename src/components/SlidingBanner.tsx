@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, ArrowRight, Percent, Zap } from 'lucide-react';
+import { db } from '@/src/lib/firebase';
+import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 
-const banners = [
+const DEFAULT_BANNERS = [
   {
-    id: 1,
+    id: 'default-1',
     title: "Onion Special Offer",
     subtitle: "Fresh from farms to your kitchen",
     highlight: "₹8 per kg",
@@ -15,7 +17,7 @@ const banners = [
     searchQuery: "onion"
   },
   {
-    id: 2,
+    id: 'default-2',
     title: "Lowest Price Ever",
     subtitle: "Unbeatable deals on everything",
     highlight: "Best Price Guaranteed",
@@ -24,32 +26,39 @@ const banners = [
     icon: <Zap className="w-6 h-6" />,
     image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800",
     searchQuery: ""
-  },
-  {
-    id: 3,
-    title: "Loyalty Rewards",
-    subtitle: "We value your trust",
-    highlight: "Up to 60% OFF",
-    description: "Get up to 60% off on every order you have placed in your account.",
-    color: "bg-red-800",
-    icon: <Percent className="w-6 h-6" />,
-    image: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&q=80&w=800",
-    searchQuery: "discount"
   }
 ];
 
 export function SlidingBanner({ onAction }: { onAction: (query: string) => void }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [banners, setBanners] = useState<any[]>(DEFAULT_BANNERS);
 
   useEffect(() => {
+    const q = query(collection(db, "banners"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dynamicBanners = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (dynamicBanners.length > 0) {
+        setBanners(dynamicBanners);
+      } else {
+        setBanners(DEFAULT_BANNERS);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % banners.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [banners.length]);
 
   const handleBannerClick = () => {
-    onAction(banners[currentIndex].searchQuery);
+    if (banners[currentIndex]) {
+      onAction(banners[currentIndex].searchQuery || '');
+    }
   };
 
   return (

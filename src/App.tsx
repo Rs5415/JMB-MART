@@ -19,7 +19,7 @@ import { SplashScreen } from "@/src/components/SplashScreen";
 import { SlidingBanner } from "@/src/components/SlidingBanner";
 import { auth, db } from "@/src/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, query, onSnapshot, orderBy, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, query, onSnapshot, orderBy, setDoc, serverTimestamp, where } from "firebase/firestore";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [deliveryTasksCount, setDeliveryTasksCount] = useState(0);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [storeProducts, setStoreProducts] = useState<Product[]>([]);
@@ -103,7 +104,7 @@ export default function App() {
     };
   }, []);
 
-  const fetchUserProfile = async (uid: string) => {
+  const fetchUserProfile = async (uid: string, retryCount = 0) => {
     try {
       const userDocRef = doc(db, "users", uid);
       const userDoc = await getDoc(userDocRef);
@@ -123,16 +124,15 @@ export default function App() {
         if (!userData.phoneNumber) {
           setCurrentPage('auth');
         } else {
-          // Role based routing - only if we are on a restricted page or home
-          if (currentPage === 'home' || currentPage === 'auth' || currentPage === 'admin' || currentPage === 'delivery') {
+          // Role based initial routing - only redirect to dashboard if the user was just at auth or splash
+          // This prevents the "sticky redirect" where an admin can't visit the home page to shop
+          if (currentPage === 'auth') {
             if (role === 'admin') {
               setCurrentPage('admin');
             } else if (role === 'delivery') {
               setCurrentPage('delivery');
             } else {
-              if (currentPage === 'admin' || currentPage === 'delivery') {
-                setCurrentPage('home');
-              }
+              setCurrentPage('home');
             }
           }
         }
@@ -146,16 +146,28 @@ export default function App() {
           }
         }
       } else {
-        // If no doc exists, we must go to auth to complete profile (phone number)
-        setCurrentPage('auth');
+        // If no doc exists, we must go to auth to complete profile
+        if (currentPage !== 'auth') {
+          setCurrentPage('auth');
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching user profile:", err);
+      
+      if (err.code === 'unavailable' || err.message?.includes('network') && retryCount < 1) {
+        console.warn("Retrying profile fetch...");
+        return fetchUserProfile(uid, retryCount + 1);
+      }
+
+      // If fetching profile fails terminals, we should logout to prevent stuck state
+      await signOut(auth);
+      alert("Verification Failed: Could not load your profile. Please check your connection and try logging in again.");
     }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setIsAuthLoading(true); // Ensure loading is true while checking
       if (currentUser) {
         setUser(currentUser);
         await fetchUserProfile(currentUser.uid);
@@ -163,14 +175,39 @@ export default function App() {
         setUser(null);
         setUserRole(null);
         setUserProfile(null);
-        setCurrentPage('home');
+        if (currentPage !== 'home' && currentPage !== 'auth') {
+          setCurrentPage('home');
+        }
       }
       setIsAuthLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+
+    // Add Delivery Task Listener
+    let unsubscribeDeliveries: (() => void) | undefined;
+    if (user && userRole === 'delivery') {
+      const q = query(
+        collection(db, "orders"),
+        where("deliveryPersonId", "==", user.uid),
+        where("status", "in", ["assigned", "out_for_delivery"])
+      );
+      unsubscribeDeliveries = onSnapshot(q, (snapshot) => {
+        setDeliveryTasksCount(snapshot.size);
+      }, (err) => console.error("Error fetching delivery count:", err));
+    } else {
+      setDeliveryTasksCount(0);
+    }
+
+    return () => {
+      unsubscribe();
+      if (unsubscribeDeliveries) unsubscribeDeliveries();
+    };
+  }, [user, userRole]);
 
   useEffect(() => {
+    // DO NOT process navigation based on current user state if we are still loading 
+    // authentication or profile data. This prevents premature redirects to 'auth'.
+    if (isAuthLoading) return;
+
     const q = searchQuery.toLowerCase();
     if (q === 'admin' && currentPage !== 'admin') {
       if (!user || userRole !== 'admin') {
@@ -184,10 +221,12 @@ export default function App() {
       } else {
         setCurrentPage('delivery');
       }
+    } else if (q === 'auth' && currentPage !== 'auth') {
+      setCurrentPage('auth');
     } else if (q === '' && (currentPage === 'admin' || currentPage === 'delivery' || currentPage === 'orders')) {
       setCurrentPage('home');
     }
-  }, [searchQuery, user, userRole, currentPage]);
+  }, [searchQuery, user, userRole, currentPage, isAuthLoading]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -240,6 +279,7 @@ export default function App() {
 
       <Navbar 
         cartCount={cartCount} 
+        deliveryCount={deliveryTasksCount}
         onSearch={setSearchQuery} 
         onOpenCart={() => setIsCartOpen(true)} 
         userRole={userRole}
@@ -287,21 +327,28 @@ export default function App() {
 
             {/* Category Section */}
             {!searchQuery && (
-              <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-black text-gray-900 tracking-tight">Shop by category</h2>
-                  <Button variant="link" className="text-red-600 font-bold p-0">See all</Button>
+              <section className="space-y-8 py-4">
+                <div className="flex items-end justify-between border-b-4 border-gray-900 pb-4">
+                  <div className="space-y-1">
+                    <h2 className="text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans">Categories</h2>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Handpicked for you</p>
+                  </div>
+                  <Button variant="link" className="text-red-600 font-extrabold p-0 h-auto text-xs uppercase tracking-widest hover:no-underline hover:text-gray-900 transition-colors">Explorer All</Button>
                 </div>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
                   {categories.map((cat) => (
-                    <button 
+                    <motion.button 
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       key={cat.name}
                       onClick={() => setSearchQuery(cat.name)}
-                      className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-red-50/50 hover:bg-red-100/50 transition-colors group"
+                      className="flex flex-col items-center gap-4 p-6 rounded-[2.5rem] bg-gray-50 hover:bg-red-50 hover:shadow-xl hover:shadow-red-50 transition-all group border-2 border-transparent hover:border-red-100"
                     >
-                      <span className="text-2xl group-hover:scale-110 transition-transform">{cat.icon}</span>
-                      <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">{cat.name}</span>
-                    </button>
+                      <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-4xl shadow-sm group-hover:shadow-md transition-shadow">
+                        {cat.icon}
+                      </div>
+                      <span className="text-xs font-black text-gray-900 uppercase tracking-widest leading-none">{cat.name}</span>
+                    </motion.button>
                   ))}
                 </div>
               </section>
@@ -309,16 +356,16 @@ export default function App() {
 
             {/* Bestsellers Section */}
             {!searchQuery && (
-              <section className="space-y-4">
+              <section className="space-y-6 pt-8">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Bestsellers</h2>
-                    <Badge className="bg-red-500 text-white border-none text-[10px] font-black uppercase tracking-widest">Hot</Badge>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase font-sans">Bestsellers</h2>
+                    <Badge className="bg-red-600 text-white border-none text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full shadow-lg shadow-red-100">Hot</Badge>
                   </div>
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4">
+                <div className="flex gap-6 overflow-x-auto pb-8 scrollbar-hide -mx-4 px-4 mask-fade-right">
                   {storeProducts.slice(0, 5).map(product => (
-                    <div key={product.id} className="min-w-[160px] md:min-w-[200px]">
+                    <div key={product.id} className="min-w-[220px] md:min-w-[260px]">
                       <ProductCard product={product} onAddToCart={addToCart} />
                     </div>
                   ))}
@@ -327,11 +374,19 @@ export default function App() {
             )}
 
             {/* Main Shop Section */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-black text-gray-900 tracking-tight">
-                  {searchQuery ? `Results for "${searchQuery}"` : 'Everything else'}
+            <section className="space-y-8 pt-12">
+              <div className="relative">
+                <h2 className="text-[12vw] font-black text-gray-100 uppercase tracking-tighter leading-[0.8] select-none absolute -top-8 -left-2 z-0 font-sans opacity-50">
+                  {searchQuery ? 'Results' : 'Collection'}
                 </h2>
+                <div className="relative z-10 flex items-end justify-between border-b-2 border-gray-100 pb-4">
+                  <h3 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans italic">
+                    {searchQuery ? `"${searchQuery}"` : 'Everything'}
+                  </h3>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{filteredProducts.length} Products</p>
+                  </div>
+                </div>
               </div>
               
               {userRole === 'admin' && (
@@ -515,10 +570,15 @@ export default function App() {
         {userRole === 'delivery' && (
           <Button 
             variant="ghost" 
-            className={`flex flex-col gap-1 h-auto ${currentPage === 'delivery' ? 'text-red-600' : 'text-gray-400'}`}
+            className={`flex flex-col gap-1 h-auto relative ${currentPage === 'delivery' ? 'text-red-600' : 'text-gray-400'}`}
             onClick={() => setCurrentPage('delivery')}
           >
             <Navigation className="w-6 h-6" />
+            {deliveryTasksCount > 0 && (
+              <span className="absolute top-0 right-2 bg-red-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center border border-white">
+                {deliveryTasksCount}
+              </span>
+            )}
             <span className="text-[10px]">Delivery</span>
           </Button>
         )}

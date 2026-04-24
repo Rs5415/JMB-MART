@@ -1,4 +1,5 @@
-import { Search, Mic, ShoppingCart, MapPin, User, ShieldCheck, Navigation } from "lucide-react";
+import { Search, Mic, ShoppingCart, MapPin, User, ShieldCheck, Navigation, Loader2 } from "lucide-react";
+import { BrandLogo } from "@/src/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -7,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 
 interface NavbarProps {
   cartCount: number;
+  deliveryCount?: number;
   onSearch: (query: string) => void;
   onOpenCart: () => void;
   userRole?: string | null;
@@ -14,7 +16,7 @@ interface NavbarProps {
   currentPage?: string;
 }
 
-export function Navbar({ cartCount, onSearch, onOpenCart, userRole, userProfile, currentPage }: NavbarProps) {
+export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, userRole, userProfile, currentPage }: NavbarProps) {
   const [isListening, setIsListening] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -71,21 +73,23 @@ export function Navbar({ cartCount, onSearch, onOpenCart, userRole, userProfile,
       <div className="container mx-auto px-4 py-2 md:py-3">
         <div className="flex items-center justify-between gap-4">
           {/* Logo & Location */}
-          <div className="flex items-center gap-4 shrink-0">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1">
-                <div className={`p-1 rounded-lg font-black text-xl ${isSpecialView ? 'bg-white text-red-900' : 'bg-red-600 text-white'}`}>JMB</div>
-                <span className="font-black text-xl tracking-tighter">{isAdminView ? 'ADMIN' : isDeliveryView ? 'DELIVERY' : 'MART'}</span>
-              </div>
-              <div className={`text-[8px] font-bold tracking-[0.2em] mt-0.5 ${isSpecialView ? 'text-red-200' : 'text-red-600'}`}>
-                JAI MAA BHAVANI
-              </div>
-              {!isSpecialView && (
-                <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 mt-0.5">
-                  <MapPin className="w-3 h-3" />
-                  <span>Delivery in 10 mins</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <BrandLogo className="w-10 h-10 md:w-11 md:h-11 shadow-sm" variant={isSpecialView ? "white" : "default"} />
+              <div className="flex flex-col">
+                <div className="flex items-center gap-0.5">
+                  <span className={`font-black text-xl md:text-2xl tracking-tighter ${isSpecialView ? 'text-white' : 'text-red-600'}`}>JMB</span>
+                  <span className={`font-black text-xl md:text-2xl tracking-tighter pl-1 ${isSpecialView ? 'text-white' : 'text-gray-900'}`}>{isAdminView ? 'ADMIN' : isDeliveryView ? 'DELIVERY' : 'MART'}</span>
+                  {!isSpecialView && (
+                    <Badge variant="outline" className={`ml-2 text-[8px] font-black uppercase tracking-tighter rounded-full px-2 py-0 h-4 ${new Date().getHours() >= 6 && new Date().getHours() < 22 ? 'border-green-500 text-green-600 bg-green-50' : 'border-gray-300 text-gray-400 bg-gray-50'}`}>
+                      {new Date().getHours() >= 6 && new Date().getHours() < 22 ? 'OPEN' : 'CLOSED'}
+                    </Badge>
+                  )}
                 </div>
-              )}
+                <div className={`text-[7px] md:text-[8px] font-black tracking-[0.25em] leading-none ${isSpecialView ? 'text-red-200' : 'text-red-600'}`}>
+                  JAI MAA BHAVANI
+                </div>
+              </div>
             </div>
           </div>
             
@@ -143,10 +147,15 @@ export function Navbar({ cartCount, onSearch, onOpenCart, userRole, userProfile,
                     variant="outline" 
                     size="sm" 
                     onClick={() => onSearch('delivery-dashboard')} 
-                    className="flex border-blue-200 text-blue-600 hover:bg-blue-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
+                    className="flex relative border-red-200 text-red-600 hover:bg-red-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4 overflow-visible"
                   >
                     <Navigation className="w-4 h-4 md:mr-2" /> 
-                    <span className="hidden md:inline">Delivery Panel</span>
+                    <span className="hidden md:inline">Delivery Portal</span>
+                    {deliveryCount > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow-lg">
+                        {deliveryCount}
+                      </span>
+                    )}
                   </Button>
                 )}
                 {userProfile ? (
@@ -156,6 +165,11 @@ export function Navbar({ cartCount, onSearch, onOpenCart, userRole, userProfile,
                       <span className="text-[10px] font-black text-red-800 leading-none">{userProfile.displayName || 'User'}</span>
                       <span className="text-[8px] font-bold text-red-600 mt-0.5">{userProfile.phoneNumber}</span>
                     </div>
+                  </div>
+                ) : userRole ? (
+                   <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                    <span className="text-[10px] font-black text-gray-400 leading-none">Loading Profile...</span>
                   </div>
                 ) : (
                   <Button 

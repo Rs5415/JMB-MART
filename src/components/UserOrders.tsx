@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/src/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, onSnapshot, updateDoc, doc, getDoc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,31 +16,37 @@ export function UserOrders() {
   const [deliveryLocations, setDeliveryLocations] = useState<{[key: string]: any}>({});
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Fetch profile
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+        }
 
-    const fetchProfile = async () => {
-      const userDoc = await getDoc(doc(db, "users", auth.currentUser!.uid));
-      if (userDoc.exists()) {
-        setUserProfile(userDoc.data());
+        // Fetch orders
+        const q = query(
+          collection(db, "orders"),
+          where("userId", "==", user.uid)
+        );
+
+        const unsubscribeOrders = onSnapshot(q, (snapshot) => {
+          const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setOrders(ordersData);
+          setIsLoading(false);
+        }, (error) => {
+          console.error("Orders snapshot error:", error);
+          setIsLoading(false);
+        });
+
+        return () => unsubscribeOrders();
+      } else {
+        setIsLoading(false);
+        setOrders([]);
       }
-    };
-    fetchProfile();
-
-    const q = query(
-      collection(db, "orders"),
-      where("userId", "==", auth.currentUser.uid)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOrders(ordersData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Orders snapshot error:", error);
-      setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
 
   // Separate effect for delivery locations to manage listeners properly

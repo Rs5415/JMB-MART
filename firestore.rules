@@ -2,154 +2,171 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {userId}
-    // Fields:
-    //   - uid: string (required) - Firebase Auth UID
-    //   - email: string (required) - User email
-    //   - displayName: string (optional) - User name
-    //   - role: string (required, ['user', 'admin']) - User role
-    //   - createdAt: timestamp (required) - Creation time
-    //
-    // Collection: orders
-    // Document ID: {orderId}
-    // Fields:
-    //   - userId: string (required) - Owner UID
-    //   - items: list (required) - List of products
-    //   - total: number (required) - Order total
-    //   - address: map (required) - Delivery address
-    //   - landmark: string (optional) - Delivery landmark
-    //   - status: string (required, ['pending', 'cancelled', 'delivered']) - Order status
-    //   - createdAt: timestamp (required) - Creation time
-    //
-    // Collection: products
-    // Document ID: {productId}
-    // Fields:
-    //   - name: string (required)
-    //   - price: number (required)
-    //   - category: string (required)
-    //   - image: string (required)
-    //   - description: string (required)
-    //   - createdAt: timestamp (required)
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
-    function isAuthenticated() {
-      return request.auth != null;
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // 2. Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isUnblocked() {
+      return !isSignedIn() || 
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isBlocked', false) != true;
     }
 
     function isAdmin() {
-      return isAuthenticated() && 
+      return isSignedIn() && (
+        request.auth.token.email == "archanasharma993151@gmail.com" ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         request.auth.token.email == "archanasharma993151@gmail.com");
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
-    function isDeliveryPerson() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'delivery';
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isNotBlocked() {
-      return !isAuthenticated() || 
-        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isBlocked', false) == false;
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    // Schema Validations
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'email', 'role', 'phoneNumber', 'createdAt']) &&
+      let requiredFields = ['uid', 'email', 'role', 'phoneNumber', 'createdAt'];
+      return data.keys().hasAll(requiredFields) &&
              data.uid == request.auth.uid &&
-             data.email == request.auth.token.email &&
+             data.email is string &&
+             data.email.size() <= 256 &&
+             data.role in ['user', 'admin', 'delivery'] &&
              data.phoneNumber is string &&
              data.phoneNumber.matches("^[0-9]{10}$") &&
-             data.role in ['user', 'admin', 'delivery'] &&
-             data.createdAt is timestamp &&
-             (!('isBlocked' in data) || data.isBlocked is bool) &&
-             (!('location' in data) || (data.location is map && data.location.keys().hasAll(['lat', 'lng', 'updatedAt'])));
+             data.createdAt == request.time &&
+             (!('isBlocked' in data) || data.isBlocked is bool);
     }
 
     function isValidOrder(data) {
-      return data.keys().hasAll(['userId', 'items', 'total', 'address', 'status', 'createdAt']) &&
-             data.userId is string &&
+      let requiredFields = ['userId', 'items', 'total', 'address', 'status', 'createdAt'];
+      return data.keys().hasAll(requiredFields) &&
+             data.userId == request.auth.uid &&
              data.items is list &&
+             data.items.size() <= 100 &&
              data.total is number &&
+             data.total >= 0 &&
              data.address is map &&
-             data.status in ['pending', 'assigned', 'out_for_delivery', 'delivered', 'cancelled'] &&
-             data.createdAt is timestamp &&
-             (!('deliveryPersonId' in data) || data.deliveryPersonId is string) &&
-             (!('otp' in data) || (data.otp is string && data.otp.matches("^[0-9]{4}$")));
+             data.status == 'pending' &&
+             data.createdAt == request.time;
     }
 
     function isValidProduct(data) {
-      return data.keys().hasAll(['name', 'price', 'category', 'image', 'description']) &&
-             data.name is string &&
-             data.price is number &&
+      let requiredFields = ['name', 'price', 'category', 'image', 'description'];
+      return data.keys().hasAll(requiredFields) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.price is number && data.price >= 0 &&
              data.category is string &&
-             data.image is string &&
-             data.description is string &&
-             (!('status' in data) || data.status in ['available', 'out_of_stock', 'unavailable']);
+             data.image is string && data.image.size() <= 1000 &&
+             data.description is string && data.description.size() <= 2000;
     }
 
-    // ===============================================================
-    // Rules
-    // ===============================================================
+    function isValidBanner(data) {
+      let requiredFields = ['title', 'subtitle', 'highlight', 'description', 'image', 'searchQuery', 'color'];
+      return data.keys().hasAll(requiredFields) &&
+             data.title is string && data.title.size() <= 100 &&
+             data.subtitle is string && data.subtitle.size() <= 200 &&
+             data.highlight is string && data.highlight.size() <= 100 &&
+             data.description is string && data.description.size() <= 500 &&
+             data.image is string && data.image.size() <= 1000 &&
+             data.searchQuery is string && data.searchQuery.size() <= 100 &&
+             data.color is string;
+    }
 
+    function isValidReview(data) {
+      let requiredFields = ['productId', 'userId', 'userName', 'rating', 'comment', 'createdAt'];
+      return data.keys().hasAll(requiredFields) &&
+             data.productId is string &&
+             data.userId == request.auth.uid &&
+             data.userName is string &&
+             data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() <= 1000 &&
+             data.createdAt == request.time;
+    }
+
+    // 3. Collection Rules
+    
     match /users/{userId} {
-      allow read: if isAuthenticated() && isNotBlocked(); // Allow users to see delivery person info/location
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
-                      (request.resource.data.role == 'user' || isAdmin());
-      allow update: if isAdmin() || 
-                      (isOwner(userId) && isNotBlocked() && isValidUser(request.resource.data) &&
-                       request.resource.data.role == resource.data.role &&
-                       request.resource.data.get('isBlocked', false) == resource.data.get('isBlocked', false));
+      // Admins can list and get any user. Owners can get their own.
+      // Split read to avoid query failures.
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() && isValidUser(request.resource.data) && 
+                      (request.resource.data.role in ['user', 'delivery'] || isAdmin());
+      
+      allow update: if (isAdmin() || (isOwner(userId) && isUnblocked())) && (
+        // Action: Update Profile (Self)
+        (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'phoneNumber', 'location', 'role']) && 
+         (request.resource.data.role == resource.data.role || (request.resource.data.role == 'delivery' && resource.data.role == 'user'))) ||
+        // Action: Administrative
+        isAdmin()
+      );
     }
 
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && isNotBlocked() && (resource.data.userId == request.auth.uid || isAdmin() || resource.data.deliveryPersonId == request.auth.uid);
-      allow create: if isAuthenticated() && isNotBlocked() && isValidOrder(request.resource.data) && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() || 
-                      (isOwner(resource.data.userId) && isNotBlocked() && request.resource.data.status == 'cancelled' && resource.data.status == 'pending') ||
-                      (isDeliveryPerson() && isNotBlocked() && resource.data.deliveryPersonId == request.auth.uid && 
-                       ((request.resource.data.status == 'out_for_delivery' && resource.data.status == 'assigned') ||
-                        (request.resource.data.status == 'delivered' && resource.data.status == 'out_for_delivery' && request.resource.data.otp == resource.data.otp)));
+      allow get: if isSignedIn() && isUnblocked() && (resource.data.userId == request.auth.uid || isAdmin() || resource.data.deliveryPersonId == request.auth.uid);
+      allow list: if isSignedIn() && isUnblocked() && (isAdmin() || resource.data.userId == request.auth.uid || resource.data.deliveryPersonId == request.auth.uid);
+      
+      allow create: if isSignedIn() && isUnblocked() && isValidOrder(request.resource.data);
+      
+      allow update: if (isAdmin() || (isSignedIn() && isUnblocked())) && (
+        // Action: Cancel
+        (isOwner(resource.data.userId) && request.resource.data.status == 'cancelled' && resource.data.status == 'pending' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+        // Action: Assign (Admin)
+        (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryPersonId', 'status', 'otp'])) ||
+        // Action: Delivery Partner Progress
+        (resource.data.deliveryPersonId == request.auth.uid && (
+          (request.resource.data.status == 'out_for_delivery' && resource.data.status == 'assigned' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+          (request.resource.data.status == 'delivered' && resource.data.status == 'out_for_delivery' && request.resource.data.otp == resource.data.otp && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+        )) ||
+        // Action: Full Admin Override
+        isAdmin()
+      );
+      
       allow delete: if isAdmin();
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow create: if isAdmin() && isValidProduct(request.resource.data);
-      allow update: if isAdmin() && isValidProduct(request.resource.data);
+      allow create, update: if isAdmin() && (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
       allow delete: if isAdmin();
     }
 
-    match /carts/{userId} {
-      allow read, write: if isOwner(userId) && isNotBlocked();
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+      allow delete: if isAdmin();
     }
 
-    match /phoneNumbers/{phoneNumber} {
-      allow read: if isAuthenticated() && isNotBlocked();
-      allow create: if isAuthenticated() && isNotBlocked() && 
-                      request.resource.data.uid == request.auth.uid &&
-                      phoneNumber.matches("^[0-9]{10}$");
-      allow update, delete: if false; // Phone numbers are immutable once linked
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isUnblocked() && isValidReview(request.resource.data);
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
     match /categories/{categoryId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /carts/{userId} {
+      allow read, write: if isOwner(userId) && isUnblocked();
+    }
+
+    match /phoneNumbers/{phoneNumber} {
+      allow read: if isSignedIn() && isUnblocked();
+      allow create: if isSignedIn() && isUnblocked() && request.resource.data.uid == request.auth.uid;
     }
   }
 }

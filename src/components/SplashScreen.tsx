@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { ShoppingBag } from "lucide-react";
+import { BrandLogo } from "@/src/components/BrandLogo";
 
 export function SplashScreen({ onComplete }: { onComplete: () => void }) {
   return (
@@ -21,11 +22,14 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
         }}
         className="flex flex-col items-center"
       >
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl mb-8 relative overflow-hidden group">
+        <div className="bg-white p-8 rounded-[3rem] shadow-2xl mb-8 relative overflow-hidden group">
           <div className="absolute inset-0 bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative flex flex-col items-center justify-center">
-            <div className="bg-red-600 text-white font-black text-4xl px-4 py-2 rounded-2xl mb-2 shadow-lg">JMB</div>
-            <div className="text-red-600 font-black text-xl tracking-tighter">MART</div>
+            <BrandLogo className="w-24 h-24 mb-4" />
+            <div className="flex flex-col items-center">
+              <div className="bg-red-600 text-white font-black text-4xl px-4 py-2 rounded-2xl mb-2 shadow-lg w-fit">JMB</div>
+              <div className="text-red-600 font-black text-xl tracking-tighter">MART</div>
+            </div>
           </div>
         </div>
         <motion.h1 

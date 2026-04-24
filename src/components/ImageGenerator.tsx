@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Image as ImageIcon, Loader2, Download, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,11 +8,17 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-export function ImageGenerator() {
-  const [prompt, setPrompt] = useState('');
+export function ImageGenerator({ onImageGenerated, promptOverride }: { onImageGenerated?: (url: string) => void, promptOverride?: string }) {
+  const [prompt, setPrompt] = useState(promptOverride || '');
   const [size, setSize] = useState<'1K' | '2K' | '4K'>('1K');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (promptOverride && !prompt) {
+      setPrompt(promptOverride);
+    }
+  }, [promptOverride]);
 
   const generateImage = async () => {
     if (!prompt.trim() || isLoading) return;
@@ -36,7 +42,9 @@ export function ImageGenerator() {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
           const base64Data = part.inlineData.data;
-          setImageUrl(`data:image/png;base64,${base64Data}`);
+          const url = `data:image/png;base64,${base64Data}`;
+          setImageUrl(url);
+          if (onImageGenerated) onImageGenerated(url);
           break;
         }
       }

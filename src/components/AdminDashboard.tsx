@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup, Users, FileUp, Download, Check, Ban, UserCheck, LayoutGrid, Tag, MapPin, Navigation } from "lucide-react";
+import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup, Users, FileUp, Download, Check, Ban, UserCheck, LayoutGrid, Tag, MapPin, Navigation, Percent, BarChart2, TrendingUp } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ImageGenerator } from "@/src/components/ImageGenerator";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "motion/react";
 import { products as initialProducts } from "@/src/data/products";
 import Papa from 'papaparse';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
 
 export function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -40,6 +41,16 @@ export function AdminDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [deliveryPartners, setDeliveryPartners] = useState<any[]>([]);
+  const [banners, setBanners] = useState<any[]>([]);
+  const [newBanner, setNewBanner] = useState({
+    title: '',
+    subtitle: '',
+    highlight: '',
+    description: '',
+    image: '',
+    searchQuery: '',
+    color: 'bg-red-600'
+  });
 
   useEffect(() => {
     const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
@@ -75,12 +86,17 @@ export function AdminDashboard() {
       setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubscribeBanners = onSnapshot(query(collection(db, "banners"), orderBy("createdAt", "desc")), (snapshot) => {
+      setBanners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubscribeOrders();
       unsubscribeProducts();
       unsubscribeUsers();
       unsubscribeDelivery();
       unsubscribeCategories();
+      unsubscribeBanners();
     };
   }, []);
 
@@ -140,7 +156,8 @@ export function AdminDashboard() {
     users: usersCount
   };
 
-  const [activeTab, setActiveTab] = useState("orders");
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("analytics");
 
   const handleAssignDelivery = async (orderId: string, deliveryPersonId: string) => {
     try {
@@ -180,10 +197,15 @@ export function AdminDashboard() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
+    if (!window.confirm("Are you sure you want to remove this product?")) return;
+    setIsDeleting(productId);
     try {
       await deleteDoc(doc(db, "products", productId));
     } catch (error) {
       console.error("Error deleting product:", error);
+      alert("Failed to delete product. Please check your permissions.");
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -198,6 +220,36 @@ export function AdminDashboard() {
       setNewCategory({ name: '', icon: '' });
     } catch (error) {
       console.error("Error adding category:", error);
+    }
+  };
+
+  const handleAddBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBanner.title || !newBanner.image) return;
+    try {
+      await addDoc(collection(db, "banners"), {
+        ...newBanner,
+        createdAt: serverTimestamp()
+      });
+      setNewBanner({
+        title: '',
+        subtitle: '',
+        highlight: '',
+        description: '',
+        image: '',
+        searchQuery: '',
+        color: 'bg-red-600'
+      });
+    } catch (error) {
+      console.error("Error adding banner:", error);
+    }
+  };
+
+  const handleDeleteBanner = async (bannerId: string) => {
+    try {
+      await deleteDoc(doc(db, "banners", bannerId));
+    } catch (error) {
+      console.error("Error deleting banner:", error);
     }
   };
 
@@ -301,6 +353,43 @@ export function AdminDashboard() {
     document.body.removeChild(link);
   };
 
+  const getDailySales = () => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return d.toLocaleDateString();
+    }).reverse();
+
+    const salesMap: { [key: string]: number } = {};
+    orders.filter(o => o.status === 'delivered').forEach(order => {
+      const date = order.createdAt?.toDate().toLocaleDateString();
+      if (date) {
+        salesMap[date] = (salesMap[date] || 0) + (order.total || 0);
+      }
+    });
+
+    return last7Days.map(date => ({
+      name: date.split('/')[0] + '/' + date.split('/')[1],
+      total: salesMap[date] || 0
+    }));
+  };
+
+  const getCategoryPerformance = () => {
+    const catSales: { [key: string]: number } = {};
+    orders.filter(o => o.status === 'delivered').forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item: any) => {
+          if (item.category) {
+            catSales[item.category] = (catSales[item.category] || 0) + (item.price * (item.quantity || 1));
+          }
+        });
+      }
+    });
+    return Object.entries(catSales).map(([name, value]) => ({ name, value }));
+  };
+
+  const CHART_COLORS = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#3b82f6', '#6366f1', '#8b5cf6'];
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -331,7 +420,7 @@ export function AdminDashboard() {
         {[
           { label: 'Total Orders', value: stats.total, icon: ShoppingBag, color: 'red', tab: 'orders' },
           { label: 'Pending', value: stats.pending, icon: Clock, color: 'orange', tab: 'orders' },
-          { label: 'Delivered', value: stats.delivered, icon: CheckCircle2, color: 'blue', tab: 'orders' },
+          { label: 'Banners', value: banners.length, icon: Sparkles, color: 'blue', tab: 'offers' },
           { label: 'Total Users', value: stats.users, icon: Users, color: 'purple', tab: 'users' },
           { label: 'Cancelled', value: orders.filter(o => o.status === 'cancelled').length, icon: XCircle, color: 'red', tab: 'orders' }
         ].map((stat) => (
@@ -353,9 +442,17 @@ export function AdminDashboard() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="flex w-full bg-gray-100 p-1.5 rounded-2xl h-14 mb-8">
+          <TabsTrigger value="analytics" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+            <BarChart2 className="w-3 h-3" />
+            Analytics
+          </TabsTrigger>
           <TabsTrigger value="orders" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Orders</TabsTrigger>
           <TabsTrigger value="users" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Users</TabsTrigger>
           <TabsTrigger value="categories" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Categories</TabsTrigger>
+          <TabsTrigger value="offers" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+            <Percent className="w-3 h-3" />
+            Offers
+          </TabsTrigger>
           <TabsTrigger value="inventory" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Inventory</TabsTrigger>
           <TabsTrigger value="add" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Add Product</TabsTrigger>
           <TabsTrigger value="bulk" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
@@ -367,6 +464,301 @@ export function AdminDashboard() {
             AI Lab
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="analytics" className="mt-0 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="bg-green-50 p-3 rounded-2xl text-green-600">
+                    <IndianRupee className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Lifetime Revenue</p>
+                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">₹{orders.filter(o => o.status === 'delivered').reduce((acc, o) => acc + (o.total || 0), 0)}</h4>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="bg-red-50 p-3 rounded-2xl text-red-600">
+                    <ShoppingBag className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Delivered Orders</p>
+                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">{orders.filter(o => o.status === 'delivered').length}</h4>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="bg-blue-50 p-3 rounded-2xl text-blue-600">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Avg. Order Value</p>
+                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">
+                      ₹{orders.filter(o => o.status === 'delivered').length > 0 
+                        ? Math.round(orders.filter(o => o.status === 'delivered').reduce((acc, o) => acc + (o.total || 0), 0) / orders.filter(o => o.status === 'delivered').length)
+                        : 0}
+                    </h4>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="bg-purple-50 p-3 rounded-2xl text-purple-600">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Success Rate</p>
+                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">
+                      {orders.length > 0 ? Math.round((orders.filter(o => o.status === 'delivered').length / orders.length) * 100) : 0}%
+                    </h4>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="border-none shadow-sm rounded-[2.5rem] bg-white overflow-hidden">
+              <CardHeader className="p-8 pb-0">
+                <CardTitle className="text-2xl font-black text-gray-900 tracking-tighter uppercase font-sans italic">Daily Sales</CardTitle>
+                <CardDescription className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Last 7 days performance</CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 pt-4">
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={getDailySales()}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 900 }}
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 900 }}
+                      />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                        itemStyle={{ color: '#ef4444', fontWeight: 900 }}
+                        labelStyle={{ fontWeight: 900, marginBottom: '4px' }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="total" 
+                        stroke="#ef4444" 
+                        strokeWidth={4} 
+                        dot={{ r: 6, fill: '#ef4444', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 8, strokeWidth: 0 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm rounded-[2.5rem] bg-white overflow-hidden">
+              <CardHeader className="p-8 pb-0">
+                <CardTitle className="text-2xl font-black text-gray-900 tracking-tighter uppercase font-sans italic">Category Share</CardTitle>
+                <CardDescription className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Sales distribution by category</CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 pt-4">
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={getCategoryPerformance()}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {getCategoryPerformance().map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                        itemStyle={{ fontWeight: 900 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-2 max-w-xs mx-auto mt-4">
+                  {getCategoryPerformance().map((cat, idx) => (
+                    <div key={cat.name} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-tighter truncate">{cat.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="offers" className="mt-0 space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
+              <CardHeader className="bg-red-50/50 p-6 border-b border-red-100">
+                <div className="flex items-center gap-3">
+                  <div className="bg-red-600 p-2 rounded-xl">
+                    <Sparkles className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Create Offer Banner</CardTitle>
+                    <CardDescription className="text-gray-500 font-bold">Design an eye-catching banner for your customers.</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <form onSubmit={handleAddBanner} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Title</Label>
+                      <Input 
+                        placeholder="Onion Special Offer" 
+                        className="rounded-xl border-gray-100 bg-gray-50 focus:ring-red-600 h-11 font-bold"
+                        value={newBanner.title}
+                        onChange={(e) => setNewBanner({...newBanner, title: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtitle</Label>
+                      <Input 
+                        placeholder="Fresh from farms" 
+                        className="rounded-xl border-gray-100 bg-gray-50 focus:ring-red-600 h-11 font-bold"
+                        value={newBanner.subtitle}
+                        onChange={(e) => setNewBanner({...newBanner, subtitle: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Highlight Text</Label>
+                      <Input 
+                        placeholder="₹8 per kg" 
+                        className="rounded-xl border-gray-100 bg-gray-50 focus:ring-red-600 h-11 font-bold"
+                        value={newBanner.highlight}
+                        onChange={(e) => setNewBanner({...newBanner, highlight: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Search Query (Redirect)</Label>
+                      <Input 
+                        placeholder="onion" 
+                        className="rounded-xl border-gray-100 bg-gray-50 focus:ring-red-600 h-11 font-bold"
+                        value={newBanner.searchQuery}
+                        onChange={(e) => setNewBanner({...newBanner, searchQuery: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</Label>
+                    <Input 
+                      placeholder="Limited time deal on premium quality onions." 
+                      className="rounded-xl border-gray-100 bg-gray-50 focus:ring-red-600 h-11 font-bold"
+                      value={newBanner.description}
+                      onChange={(e) => setNewBanner({...newBanner, description: e.target.value})}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Banner Image</Label>
+                    <ImageGenerator 
+                      onImageGenerated={(url) => setNewBanner({...newBanner, image: url})}
+                      promptOverride={`${newBanner.title} ${newBanner.description} realistic grocery store high quality`}
+                    />
+                    {newBanner.image && (
+                      <div className="w-full h-32 rounded-2xl overflow-hidden border border-gray-100">
+                        <img src={newBanner.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Background Color</Label>
+                    <div className="flex gap-2">
+                      {['bg-red-600', 'bg-gray-900', 'bg-red-800', 'bg-blue-600', 'bg-green-600'].map(color => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setNewBanner({...newBanner, color})}
+                          className={`w-10 h-10 rounded-xl transition-all ${color} ${newBanner.color === color ? 'ring-4 ring-red-100 scale-110' : 'opacity-60 hover:opacity-100'}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <Button className="w-full bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl h-14 shadow-xl shadow-red-100 active:scale-95 transition-all mt-4">
+                    <Plus className="w-5 h-5 mr-2" /> CREATE BANNER
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50 p-6 border-b border-gray-100">
+                <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Active Banners</CardTitle>
+                <CardDescription className="text-gray-500 font-bold">Manage your live marketing content.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[600px]">
+                  <div className="divide-y divide-gray-50">
+                    {banners.map(banner => (
+                      <div key={banner.id} className="p-4 hover:bg-gray-50/50 transition-colors flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-16 h-16 rounded-xl overflow-hidden ${banner.color}`}>
+                            <img src={banner.image} className="w-full h-full object-cover opacity-60" referrerPolicy="no-referrer" />
+                          </div>
+                          <div>
+                            <p className="font-black text-gray-900 tracking-tight">{banner.title}</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Target: "{banner.searchQuery}"</p>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl"
+                          onClick={() => handleDeleteBanner(banner.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {banners.length === 0 && (
+                      <div className="py-20 text-center">
+                        <Sparkles className="w-10 h-10 text-gray-200 mx-auto mb-4" />
+                        <p className="font-black text-gray-900">No active banners</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         <TabsContent value="orders" className="mt-0">
           <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
@@ -763,8 +1155,14 @@ export function AdminDashboard() {
                           variant="ghost" 
                           className="col-span-2 rounded-xl text-red-500 hover:text-red-700 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest h-10"
                           onClick={() => handleDeleteProduct(product.id)}
+                          disabled={isDeleting === product.id}
                         >
-                          <Trash2 className="w-3 h-3 mr-2" /> Remove Product
+                          {isDeleting === product.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                          ) : (
+                            <Trash2 className="w-3 h-3 mr-2" />
+                          )}
+                          Remove Product
                         </Button>
                       </div>
                     </div>

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogIn, UserPlus, Mail, Lock, Loader2, Phone } from "lucide-react";
+import { LogIn, UserPlus, Mail, Lock, Loader2, Phone, Bike, ShieldCheck } from "lucide-react";
 
 export function AuthModal({ onComplete }: { onComplete: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +17,8 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [step, setStep] = useState<'auth' | 'phone'>('auth');
   const [pendingUser, setPendingUser] = useState<any>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     // If user is already authenticated but we're in AuthModal, 
@@ -34,6 +36,32 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
     const phoneRef = doc(db, "phoneNumbers", phone);
     const phoneSnap = await getDoc(phoneRef);
     return !phoneSnap.exists();
+  };
+
+  const handleAuthError = (err: any) => {
+    console.error("Auth error:", err);
+    const code = err.code || "";
+    if (code === 'auth/network-request-failed') {
+      setError("Network Error: Could not reach Firebase servers. Please disable any ad-blockers, try disabling Incognito/Private mode, and ensure your internet connection is stable.");
+    } else if (code === 'auth/popup-closed-by-user') {
+      setError("Sign-in popup was closed. Please try again.");
+    } else if (code === 'auth/operation-not-allowed') {
+      setError("Sign-in method disabled: Please enable 'Email/Password' and 'Google' providers in your Firebase Console under 'Authentication' > 'Sign-in method'.");
+    } else if (code === 'auth/internal-error') {
+      setError("A temporary internal error occurred. Please refresh and try again.");
+    } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+      setError("Invalid email or password. Please check your credentials and try again.");
+    } else if (code === 'auth/email-already-in-use') {
+      setError("This email is already registered. Please login instead.");
+    } else if (code === 'auth/too-many-requests') {
+      setError("Too many failed attempts. Your account has been temporarily locked for security. Please try again later.");
+    } else if (code === 'auth/weak-password') {
+      setError("Password is too weak. Please use at least 6 characters.");
+    } else if (err.message?.includes('insufficient permissions')) {
+      setError("Profile Sync Failed: You may not have permission to perform this action. Please contact support.");
+    } else {
+      setError(err.message || "An authentication error occurred.");
+    }
   };
 
   const syncUserToFirestore = async (user: any, phone?: string, requestedRole: string = 'user') => {
@@ -69,6 +97,7 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
         createdAt: serverTimestamp()
       });
       await batch.commit();
+      setUserRole(finalRole);
     } else {
       const userData = userSnap.data();
       if (!userData.phoneNumber) {
@@ -91,10 +120,20 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
         });
         await batch.commit();
       }
+      
+      let updatedRole = userData.role;
+      // Update role if explicitly requested (e.g. logging in via delivery tab)
+      // and not overriding admin
       if (isAdminEmail && userData.role !== "admin") {
         await setDoc(userRef, { role: "admin" }, { merge: true });
+        updatedRole = "admin";
+      } else if (requestedRole === 'delivery' && userData.role === 'user') {
+        await setDoc(userRef, { role: "delivery" }, { merge: true });
+        updatedRole = "delivery";
       }
+      setUserRole(updatedRole);
     }
+    setIsSuccess(true);
     return true;
   };
 
@@ -110,13 +149,13 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
       const success = await syncUserToFirestore(pendingUser, phoneNumber, pendingUser.requestedRole);
       if (success) onComplete();
     } catch (err: any) {
-      setError(err.message);
+      handleAuthError(err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (retryCount = 0) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -124,13 +163,17 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
       const success = await syncUserToFirestore(result.user);
       if (success) onComplete();
     } catch (err: any) {
-      setError(err.message);
+      if (err.code === 'auth/network-request-failed' && retryCount < 1) {
+        console.warn("Retrying Google Login due to network failure...");
+        return handleGoogleLogin(retryCount + 1);
+      }
+      handleAuthError(err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEmailAuth = async (type: 'login' | 'register', requestedRole: string = 'user') => {
+  const handleEmailAuth = async (type: 'login' | 'register', requestedRole: string = 'user', retryCount = 0) => {
     if (type === 'register' && !phoneNumber.match(/^[0-9]{10}$/)) {
       setError("Please enter a valid 10-digit mobile number.");
       return;
@@ -149,7 +192,11 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
       const success = await syncUserToFirestore(user, type === 'register' ? phoneNumber : undefined, requestedRole);
       if (success) onComplete();
     } catch (err: any) {
-      setError(err.message);
+      if (err.code === 'auth/network-request-failed' && retryCount < 1) {
+        console.warn(`Retrying ${type} due to network failure...`);
+        return handleEmailAuth(type, requestedRole, retryCount + 1);
+      }
+      handleAuthError(err);
     } finally {
       setIsLoading(false);
     }
@@ -203,6 +250,42 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
     );
   }
 
+  if (isSuccess) {
+    return (
+      <Card className="w-full max-w-md mx-auto border-red-100 shadow-xl overflow-hidden">
+        <div className="h-2 bg-red-600" />
+        <CardContent className="p-10 text-center space-y-6">
+          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto">
+            <UserPlus className="w-10 h-10 text-green-600" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Login Successful!</h2>
+            <p className="text-gray-500 font-bold">Welcome back to JMB MART.</p>
+          </div>
+          
+          <div className="pt-6 grid grid-cols-1 gap-4">
+            {(userRole === 'admin' || userRole === 'delivery') && (
+              <Button 
+                onClick={onComplete}
+                className="w-full py-8 text-lg font-black bg-red-600 hover:bg-red-700 text-white rounded-3xl shadow-xl shadow-red-100 flex flex-col h-auto"
+              >
+                <span>ENTER {userRole.toUpperCase()} PORTAL</span>
+                <span className="text-[10px] opacity-80 uppercase tracking-widest font-bold">Launch your dashboard</span>
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              onClick={() => onComplete()}
+              className="w-full h-14 font-black rounded-3xl border-gray-200"
+            >
+              GO TO HOME SHOP
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full max-w-md mx-auto border-red-100 shadow-xl">
       <CardHeader className="text-center">
@@ -215,10 +298,18 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
       <CardContent>
         <Tabs defaultValue="login" className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-6 bg-red-100 p-1 rounded-xl">
-            <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white">Login</TabsTrigger>
-            <TabsTrigger value="register" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white">Register</TabsTrigger>
-            <TabsTrigger value="delivery" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white">Delivery</TabsTrigger>
-            <TabsTrigger value="admin" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white">Admin</TabsTrigger>
+            <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white flex items-center justify-center gap-1">
+              <LogIn className="w-3 h-3" /> Login
+            </TabsTrigger>
+            <TabsTrigger value="register" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white flex items-center justify-center gap-1">
+              <UserPlus className="w-3 h-3" /> Register
+            </TabsTrigger>
+            <TabsTrigger value="delivery" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white flex items-center justify-center gap-1">
+              <Bike className="w-3 h-3" /> Delivery
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white flex items-center justify-center gap-1">
+              <ShieldCheck className="w-3 h-3" /> Admin
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="login" className="space-y-4">
@@ -347,12 +438,52 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
           <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-gray-500">Or continue with</span></div>
         </div>
 
-        <Button variant="outline" className="w-full border-red-200 hover:bg-red-50" onClick={handleGoogleLogin} disabled={isLoading}>
-          <img src="https://www.google.com/favicon.ico" className="w-4 h-4 mr-2" alt="Google" />
+        <Button variant="outline" className="w-full border-red-200 hover:bg-red-50" onClick={() => handleGoogleLogin()} disabled={isLoading}>
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+          ) : (
+            <img src="https://www.google.com/favicon.ico" className="w-4 h-4 mr-2" alt="Google" />
+          )}
           Google Login
         </Button>
 
-        {error && <p className="text-red-500 text-xs mt-4 text-center">{error}</p>}
+        {error && (
+          <div className="mt-4 p-4 rounded-xl bg-red-50 border border-red-200">
+            {error.includes("Sign-in method disabled") ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-red-700 font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                  <span>Configuration Required</span>
+                </div>
+                <p className="text-xs text-red-600 leading-relaxed font-medium">
+                  Authentication providers are currently disabled in your Firebase project. To fix this:
+                </p>
+                <div className="space-y-2">
+                  <div className="bg-white/50 p-3 rounded-lg border border-red-100 space-y-2">
+                    <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">Instructions:</p>
+                    <ol className="text-xs text-gray-700 space-y-2 list-decimal ml-4 font-medium">
+                      <li>Go to <a href="https://console.firebase.google.com/project/gothic-isotope-454705-h0/authentication/providers" target="_blank" className="text-blue-600 underline font-black">Authentication Settings</a></li>
+                      <li>Click "Add new provider"</li>
+                      <li>Enable both <strong className="text-gray-900">Email/Password</strong> and <strong className="text-gray-900">Google</strong></li>
+                    </ol>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="w-full border-red-300 text-red-700 hover:bg-red-100 font-bold text-xs h-10"
+                    onClick={() => {
+                      setError(null);
+                      setIsLoading(false);
+                    }}
+                  >
+                    I've enabled them - Try Again
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-red-500 text-xs text-center font-medium">{error}</p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
