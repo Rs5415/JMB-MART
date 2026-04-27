@@ -96,15 +96,15 @@ export function UserOrders() {
 
   return (
     <div className="max-w-2xl mx-auto pb-20">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
-          <Package className="w-6 h-6 text-red-600" />
+      <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
+        <div className="w-10 h-10 md:w-12 md:h-12 bg-red-100 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0">
+          <Package className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
         </div>
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tighter">My Orders</h1>
-          <p className="text-gray-400 font-bold text-sm">Track and manage your recent purchases.</p>
+          <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tighter">My Orders</h1>
+          <p className="text-gray-400 font-bold text-[10px] md:text-sm">Track and manage your recent purchases.</p>
           {userProfile && (
-            <p className="text-xs text-red-600 font-black mt-1 flex items-center gap-1">
+            <p className="text-[10px] text-red-600 font-black mt-0.5 flex items-center gap-1">
               <Phone className="w-3 h-3" /> Connected: {userProfile.phoneNumber}
             </p>
           )}
@@ -112,23 +112,23 @@ export function UserOrders() {
       </div>
       
       <ScrollArea className="h-[75vh] pr-4 -mr-4">
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
           {orders.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map((order) => (
-            <Card key={order.id} className="border-none shadow-sm bg-white rounded-3xl overflow-hidden group hover:shadow-md transition-all">
-              <CardHeader className="p-6 pb-2">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center">
-                      <ShoppingBag className="w-5 h-5 text-gray-400" />
+            <Card key={order.id} className="border-none shadow-sm bg-white rounded-2xl md:rounded-3xl overflow-hidden group hover:shadow-md transition-all">
+              <CardHeader className="p-4 md:p-6 pb-2">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-50 rounded-lg md:rounded-xl flex items-center justify-center shrink-0">
+                      <ShoppingBag className="w-4 h-4 md:w-5 md:h-5 text-gray-400" />
                     </div>
-                    <div>
-                      <p className="font-black text-gray-900 tracking-tight">Order #{order.id.slice(-5)}</p>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                    <div className="min-w-0">
+                      <p className="font-black text-gray-900 tracking-tight text-sm md:text-base truncate">Order #{order.id.slice(-5)}</p>
+                      <p className="text-[8px] md:text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate">
                         {order.createdAt?.toDate().toLocaleString()}
                       </p>
                     </div>
                   </div>
-                  <Badge className={`uppercase text-[10px] font-black px-3 py-1 rounded-full ${
+                  <Badge className={`uppercase text-[8px] md:text-[10px] font-black px-2 md:px-3 py-1 rounded-full whitespace-nowrap ${
                     order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
                     order.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
                     order.status === 'out_for_delivery' ? 'bg-purple-100 text-purple-700' :
@@ -140,80 +140,79 @@ export function UserOrders() {
                 </div>
 
                 {order.status === 'out_for_delivery' && order.otp && (
-                  <div className="mt-4 bg-red-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-red-100">
+                  <div className="mt-3 md:mt-4 bg-red-600 text-white p-3 md:p-4 rounded-xl md:rounded-2xl flex items-center justify-between shadow-lg shadow-red-100">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Delivery OTP</p>
-                      <p className="text-2xl font-black tracking-[0.3em]">{order.otp}</p>
+                      <p className="text-[8px] md:text-[10px] font-black uppercase tracking-widest opacity-80">Delivery OTP</p>
+                      <p className="text-xl md:text-2xl font-black tracking-[0.3em]">{order.otp}</p>
                     </div>
                     <div className="text-right">
-                      <KeyRound className="w-8 h-8 opacity-20" />
-                      <p className="text-[9px] font-bold mt-1 max-w-[120px]">Share this code with delivery partner only</p>
+                      <KeyRound className="w-6 h-6 md:w-8 md:h-8 opacity-20" />
+                      <p className="text-[7px] md:text-[9px] font-bold mt-1 max-w-[100px] md:max-w-[120px]">Share with delivery partner only</p>
                     </div>
                   </div>
                 )}
 
                 {order.deliveryPersonId && (order.status === 'assigned' || order.status === 'out_for_delivery') && (
-                  <div className="mt-4 bg-blue-50 border border-blue-100 p-4 rounded-2xl space-y-3">
+                  <div className="mt-3 md:mt-4 bg-blue-50 border border-blue-100 p-3 md:p-4 rounded-xl md:rounded-2xl space-y-2 md:space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Navigation className="w-4 h-4 text-blue-600 animate-pulse" />
-                        <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Live Tracking</p>
+                      <div className="flex items-center gap-1.5 md:gap-2">
+                        <Navigation className="w-3 h-3 md:w-4 md:h-4 text-blue-600 animate-pulse" />
+                        <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Live Tracking</p>
                       </div>
                       {deliveryLocations[order.deliveryPersonId] && (
                         <a 
                           href={`https://www.google.com/maps?q=${deliveryLocations[order.deliveryPersonId].lat},${deliveryLocations[order.deliveryPersonId].lng}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[10px] font-black text-blue-600 underline"
+                          className="text-[9px] md:text-[10px] font-black text-blue-600 underline"
                         >
-                          View on Map
+                          View Map
                         </a>
                       )}
                     </div>
-                    <p className="text-[10px] text-blue-600 font-bold">
+                    <p className="text-[9px] md:text-[10px] text-blue-600 font-bold">
                       {order.status === 'out_for_delivery' 
-                        ? "Your delivery partner is on the way!" 
-                        : "Delivery partner assigned and preparing for pickup."}
+                        ? "Delivery partner is on the way!" 
+                        : "Partner assigned & preparing."}
                     </p>
                   </div>
                 )}
               </CardHeader>
-              <CardContent className="p-6 pt-4">
-                <div className="bg-gray-50/50 rounded-2xl p-4 space-y-3 border border-gray-50">
+              <CardContent className="p-4 md:p-6 pt-4">
+                <div className="bg-gray-50/50 rounded-xl md:rounded-2xl p-3 md:p-4 space-y-2 md:space-y-3 border border-gray-50">
                   {order.items?.map((item: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-900">{item.name}</span>
-                        <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 rounded-md">x{item.quantity}</span>
+                    <div key={i} className="flex justify-between items-center text-xs md:text-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-bold text-gray-900 truncate">{item.name}</span>
+                        <span className="text-[8px] md:text-[10px] font-black text-red-600 bg-red-50 px-1 md:px-1.5 rounded-md whitespace-nowrap">x{item.quantity}</span>
                       </div>
-                      <span className="font-black text-gray-900">₹{item.price * item.quantity}</span>
+                      <span className="font-black text-gray-900 whitespace-nowrap">₹{item.price * item.quantity}</span>
                     </div>
                   ))}
                 </div>
                 
-                <div className="flex justify-between items-center mt-6">
+                <div className="flex justify-between items-end mt-4 md:mt-6">
                   <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Paid</p>
-                    <p className="text-2xl font-black text-red-700 tracking-tighter">₹{order.total}</p>
+                    <p className="text-[8px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Paid</p>
+                    <p className="text-xl md:text-2xl font-black text-red-700 tracking-tighter leading-none">₹{order.total}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5 md:gap-2">
                     {order.status === 'pending' && (
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50 font-black rounded-xl px-4 h-10"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50 font-black rounded-lg md:rounded-xl px-2 md:px-4 h-8 md:h-10 text-[10px] md:text-sm"
                         onClick={() => handleCancelOrder(order.id)}
                       >
-                        <XCircle className="w-4 h-4 mr-2" />
                         Cancel
                       </Button>
                     )}
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="border-red-100 text-red-600 hover:bg-red-50 font-black rounded-xl px-4 h-10"
+                      className="border-red-100 text-red-600 hover:bg-red-50 font-black rounded-lg md:rounded-xl px-2 md:px-4 h-8 md:h-10 text-[10px] md:text-sm"
                     >
-                      Need Help?
+                      Help
                     </Button>
                   </div>
                 </div>

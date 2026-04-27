@@ -215,16 +215,17 @@ export default function App() {
       } else {
         setCurrentPage('admin');
       }
+      setSearchQuery(''); // Clear search after navigation
     } else if (q === 'delivery-dashboard' && currentPage !== 'delivery') {
       if (!user || userRole !== 'delivery') {
         setCurrentPage('auth');
       } else {
         setCurrentPage('delivery');
       }
+      setSearchQuery(''); // Clear search after navigation
     } else if (q === 'auth' && currentPage !== 'auth') {
       setCurrentPage('auth');
-    } else if (q === '' && (currentPage === 'admin' || currentPage === 'delivery' || currentPage === 'orders')) {
-      setCurrentPage('home');
+      setSearchQuery('');
     }
   }, [searchQuery, user, userRole, currentPage, isAuthLoading]);
 
@@ -272,7 +273,7 @@ export default function App() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-gray-50/30 pb-32 md:pb-12">
       <AnimatePresence>
         {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
       </AnimatePresence>
@@ -287,7 +288,7 @@ export default function App() {
         currentPage={currentPage}
       />
 
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 md:px-6 py-4 md:py-8 max-w-7xl">
         {isAuthLoading ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <Loader2 className="w-8 h-8 animate-spin text-red-600" />
@@ -330,24 +331,24 @@ export default function App() {
               <section className="space-y-8 py-4">
                 <div className="flex items-end justify-between border-b-4 border-gray-900 pb-4">
                   <div className="space-y-1">
-                    <h2 className="text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans">Categories</h2>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Handpicked for you</p>
+                    <h2 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans">Categories</h2>
+                    <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-[0.2em] md:tracking-[0.3em]">Handpicked for you</p>
                   </div>
-                  <Button variant="link" className="text-red-600 font-extrabold p-0 h-auto text-xs uppercase tracking-widest hover:no-underline hover:text-gray-900 transition-colors">Explorer All</Button>
+                  <Button variant="link" className="text-red-600 font-extrabold p-0 h-auto text-[10px] md:text-xs uppercase tracking-widest hover:no-underline hover:text-gray-900 transition-colors">Explorer All</Button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
                   {categories.map((cat) => (
                     <motion.button 
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       key={cat.name}
                       onClick={() => setSearchQuery(cat.name)}
-                      className="flex flex-col items-center gap-4 p-6 rounded-[2.5rem] bg-gray-50 hover:bg-red-50 hover:shadow-xl hover:shadow-red-50 transition-all group border-2 border-transparent hover:border-red-100"
+                      className="flex flex-col items-center gap-3 md:gap-4 p-4 md:p-6 rounded-[2rem] md:rounded-[2.5rem] bg-gray-50 hover:bg-red-50 hover:shadow-xl hover:shadow-red-50 transition-all group border-2 border-transparent hover:border-red-100"
                     >
-                      <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-4xl shadow-sm group-hover:shadow-md transition-shadow">
+                      <div className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl md:rounded-3xl flex items-center justify-center text-2xl md:text-4xl shadow-sm group-hover:shadow-md transition-shadow">
                         {cat.icon}
                       </div>
-                      <span className="text-xs font-black text-gray-900 uppercase tracking-widest leading-none">{cat.name}</span>
+                      <span className="text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest leading-none">{cat.name}</span>
                     </motion.button>
                   ))}
                 </div>
@@ -356,16 +357,16 @@ export default function App() {
 
             {/* Bestsellers Section */}
             {!searchQuery && (
-              <section className="space-y-6 pt-8">
+              <section className="space-y-6 pt-4 md:pt-8">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase font-sans">Bestsellers</h2>
-                    <Badge className="bg-red-600 text-white border-none text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full shadow-lg shadow-red-100">Hot</Badge>
+                  <div className="flex items-center gap-3 md:gap-4">
+                    <h2 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tighter uppercase font-sans">Bestsellers</h2>
+                    <Badge className="bg-red-600 text-white border-none text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] px-2 md:px-3 py-1 rounded-full shadow-lg shadow-red-100">Hot</Badge>
                   </div>
                 </div>
-                <div className="flex gap-6 overflow-x-auto pb-8 scrollbar-hide -mx-4 px-4 mask-fade-right">
+                <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 md:pb-8 scrollbar-hide -mx-4 px-4 mask-fade-right">
                   {storeProducts.slice(0, 5).map(product => (
-                    <div key={product.id} className="min-w-[220px] md:min-w-[260px]">
+                    <div key={product.id} className="min-w-[180px] sm:min-w-[220px] md:min-w-[260px]">
                       <ProductCard product={product} onAddToCart={addToCart} />
                     </div>
                   ))}
@@ -374,13 +375,13 @@ export default function App() {
             )}
 
             {/* Main Shop Section */}
-            <section className="space-y-8 pt-12">
+            <section className="space-y-6 md:space-y-8 pt-8 md:pt-12">
               <div className="relative">
-                <h2 className="text-[12vw] font-black text-gray-100 uppercase tracking-tighter leading-[0.8] select-none absolute -top-8 -left-2 z-0 font-sans opacity-50">
+                <h2 className="text-[15vw] md:text-[12vw] font-black text-gray-100 uppercase tracking-tighter leading-[0.8] select-none absolute -top-4 md:-top-8 -left-2 z-0 font-sans opacity-50">
                   {searchQuery ? 'Results' : 'Collection'}
                 </h2>
                 <div className="relative z-10 flex items-end justify-between border-b-2 border-gray-100 pb-4">
-                  <h3 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans italic">
+                  <h3 className="text-2xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans italic">
                     {searchQuery ? `"${searchQuery}"` : 'Everything'}
                   </h3>
                   <div className="text-right">
@@ -449,18 +450,18 @@ export default function App() {
             </section>
 
             {/* Footer */}
-            <footer className="pt-12 pb-8 border-t border-gray-100">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-1">
+            <footer className="pt-8 md:pt-12 pb-8 border-t border-gray-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+                <div className="space-y-4 text-center md:text-left">
+                  <div className="flex items-center justify-center md:justify-start gap-1">
                     <div className="p-1 bg-red-600 text-white rounded-lg font-black text-sm">JMB</div>
                     <span className="font-black text-sm tracking-tighter">MART</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 font-bold leading-relaxed">
+                  <p className="text-[10px] text-gray-400 font-bold leading-relaxed max-w-xs mx-auto md:mx-0">
                     Jai Maa Bhavani Mart - Your neighborhood grocery store delivered to your doorstep in minutes.
                   </p>
                 </div>
-                <div>
+                <div className="text-center md:text-left">
                   <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest mb-4">Company</h4>
                   <ul className="space-y-2 text-[10px] font-bold text-gray-500">
                     <li>About Us</li>
@@ -469,7 +470,7 @@ export default function App() {
                     <li>Privacy Policy</li>
                   </ul>
                 </div>
-                <div>
+                <div className="text-center md:text-left">
                   <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest mb-4">Help</h4>
                   <ul className="space-y-2 text-[10px] font-bold text-gray-500">
                     <li>Contact Us</li>
@@ -477,7 +478,7 @@ export default function App() {
                     <li>Refund Policy</li>
                   </ul>
                 </div>
-                <div>
+                <div className="text-center md:text-left">
                   <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest mb-4">Partners</h4>
                   <ul className="space-y-2 text-[10px] font-bold text-gray-500">
                     <li>
@@ -493,7 +494,7 @@ export default function App() {
                 </div>
               </div>
               <div className="text-center pt-8 border-t border-gray-50">
-                <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.3em]">
+                <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.3em] px-4">
                   © 2026 JMB MART. JAI MAA BHAVANI.
                 </p>
               </div>
@@ -538,70 +539,70 @@ export default function App() {
       <Chatbot />
 
       {/* Mobile Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-3 px-6 flex justify-around items-center md:hidden z-30">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md bg-white/90 backdrop-blur-xl border border-gray-200 py-3 px-2 flex justify-around items-center md:hidden z-50 rounded-[2rem] shadow-2xl shadow-gray-200">
         <Button 
           variant="ghost" 
-          className={`flex flex-col gap-1 h-auto ${currentPage === 'home' ? 'text-red-600' : 'text-gray-400'}`}
+          className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'home' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
           onClick={() => setCurrentPage('home')}
         >
-          <HomeIcon className="w-6 h-6" />
-          <span className="text-[10px]">Home</span>
+          <HomeIcon className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-tighter">Home</span>
         </Button>
         {user && userRole !== 'admin' && userRole !== 'delivery' && (
           <Button 
             variant="ghost" 
-            className={`flex flex-col gap-1 h-auto ${currentPage === 'orders' ? 'text-red-600' : 'text-gray-400'}`}
+            className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'orders' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
             onClick={() => setCurrentPage('orders')}
           >
-            <Package className="w-6 h-6" />
-            <span className="text-[10px]">Orders</span>
+            <Package className="w-5 h-5" />
+            <span className="text-[8px] font-black uppercase tracking-tighter">Orders</span>
           </Button>
         )}
         {userRole === 'admin' && (
           <Button 
             variant="ghost" 
-            className={`flex flex-col gap-1 h-auto ${currentPage === 'admin' ? 'text-red-600' : 'text-gray-400'}`}
+            className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'admin' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
             onClick={() => setCurrentPage('admin')}
           >
-            <ShieldCheck className="w-6 h-6" />
-            <span className="text-[10px]">Admin</span>
+            <ShieldCheck className="w-5 h-5" />
+            <span className="text-[8px] font-black uppercase tracking-tighter">Admin</span>
           </Button>
         )}
         {userRole === 'delivery' && (
           <Button 
             variant="ghost" 
-            className={`flex flex-col gap-1 h-auto relative ${currentPage === 'delivery' ? 'text-red-600' : 'text-gray-400'}`}
+            className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl relative ${currentPage === 'delivery' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
             onClick={() => setCurrentPage('delivery')}
           >
-            <Navigation className="w-6 h-6" />
+            <Navigation className="w-5 h-5" />
             {deliveryTasksCount > 0 && (
-              <span className="absolute top-0 right-2 bg-red-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center border border-white">
+              <span className="absolute top-1 right-3 bg-red-600 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-sm font-black">
                 {deliveryTasksCount}
               </span>
             )}
-            <span className="text-[10px]">Delivery</span>
+            <span className="text-[8px] font-black uppercase tracking-tighter">Delivery</span>
           </Button>
         )}
         <Button 
           variant="ghost" 
-          className={`flex flex-col gap-1 h-auto ${currentPage === 'auth' ? 'text-red-600' : 'text-gray-400'}`}
-          onClick={() => user ? handleLogout() : setCurrentPage('auth')}
-        >
-          {user ? <LogOut className="w-6 h-6" /> : <UserIcon className="w-6 h-6" />}
-          <span className="text-[10px]">{user ? 'Logout' : 'Login'}</span>
-        </Button>
-        <Button 
-          variant="ghost" 
-          className="flex flex-col gap-1 h-auto text-gray-400 relative"
+          className="flex flex-col gap-1 h-auto flex-1 rounded-2xl text-gray-400 relative"
           onClick={() => setIsCartOpen(true)}
         >
-          <ShoppingBag className="w-6 h-6" />
+          <ShoppingBag className="w-5 h-5" />
           {cartCount > 0 && (
-            <span className="absolute top-0 right-2 bg-red-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+            <span className="absolute top-1 right-3 bg-red-600 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-sm font-black">
               {cartCount}
             </span>
           )}
-          <span className="text-[10px]">Cart</span>
+          <span className="text-[8px] font-black uppercase tracking-tighter">Cart</span>
+        </Button>
+        <Button 
+          variant="ghost" 
+          className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'auth' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
+          onClick={() => user ? handleLogout() : setCurrentPage('auth')}
+        >
+          {user ? <LogOut className="w-5 h-5" /> : <UserIcon className="w-5 h-5" />}
+          <span className="text-[8px] font-black uppercase tracking-tighter">{user ? 'Logout' : 'Login'}</span>
         </Button>
       </div>
     </div>

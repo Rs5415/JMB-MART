@@ -401,22 +401,22 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-8 pb-20">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tighter">Dashboard</h1>
-          <p className="text-gray-500 font-bold mt-1">Manage your store inventory and customer orders.</p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2">
+        <div className="text-center md:text-left">
+          <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tighter">Dashboard</h1>
+          <p className="text-sm md:text-base text-gray-500 font-bold mt-1">Manage your store inventory and customer orders.</p>
         </div>
         <Button 
           onClick={handleSyncProducts} 
           disabled={isSyncing}
-          className="bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl px-8 h-12 shadow-lg shadow-red-100 active:scale-95 transition-all"
+          className="bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl w-full md:w-auto px-8 h-14 md:h-12 shadow-lg shadow-red-100 active:scale-95 transition-all"
         >
           {isSyncing ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <DatabaseBackup className="w-5 h-5 mr-2" />}
           Sync Products
         </Button>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
         {[
           { label: 'Total Orders', value: stats.total, icon: ShoppingBag, color: 'red', tab: 'orders' },
           { label: 'Pending', value: stats.pending, icon: Clock, color: 'orange', tab: 'orders' },
@@ -441,27 +441,27 @@ export function AdminDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex w-full bg-gray-100 p-1.5 rounded-2xl h-14 mb-8">
-          <TabsTrigger value="analytics" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+        <TabsList className="bg-gray-100 p-1.5 rounded-2xl h-14 mb-8 flex w-full overflow-x-auto scrollbar-hide flex-nowrap justify-start md:justify-around md:flex-wrap">
+          <TabsTrigger value="analytics" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4">
             <BarChart2 className="w-3 h-3" />
             Analytics
           </TabsTrigger>
-          <TabsTrigger value="orders" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Orders</TabsTrigger>
-          <TabsTrigger value="users" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Users</TabsTrigger>
-          <TabsTrigger value="categories" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Categories</TabsTrigger>
-          <TabsTrigger value="offers" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+          <TabsTrigger value="orders" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Orders</TabsTrigger>
+          <TabsTrigger value="users" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Users</TabsTrigger>
+          <TabsTrigger value="categories" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Categories</TabsTrigger>
+          <TabsTrigger value="offers" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 text-center">
             <Percent className="w-3 h-3" />
             Offers
           </TabsTrigger>
-          <TabsTrigger value="inventory" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Inventory</TabsTrigger>
-          <TabsTrigger value="add" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px]">Add Product</TabsTrigger>
-          <TabsTrigger value="bulk" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+          <TabsTrigger value="inventory" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Inventory</TabsTrigger>
+          <TabsTrigger value="add" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Add</TabsTrigger>
+          <TabsTrigger value="bulk" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 whitespace-nowrap">
             <FileUp className="w-3 h-3" />
-            Bulk Upload
+            Bulk
           </TabsTrigger>
-          <TabsTrigger value="ai" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+          <TabsTrigger value="ai" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 whitespace-nowrap">
             <Sparkles className="w-3 h-3" />
-            AI Lab
+            Lab
           </TabsTrigger>
         </TabsList>
 

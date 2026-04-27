@@ -25,7 +25,7 @@ export const ProductCard = memo(function ProductCard({ product, onAddToCart }: P
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       <Card className={`overflow-hidden border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.1)] transition-all duration-300 group relative bg-white rounded-3xl ${!isAvailable ? 'opacity-75' : ''}`}>
-        <div className="relative aspect-square overflow-hidden bg-gray-50/50 p-4">
+        <div className="relative aspect-square overflow-hidden bg-gray-50/50 p-2 md:p-4">
           <img
             src={product.image}
             alt={product.name}
@@ -45,7 +45,7 @@ export const ProductCard = memo(function ProductCard({ product, onAddToCart }: P
                   <Button 
                     variant="secondary" 
                     size="icon" 
-                    className="w-8 h-8 rounded-xl bg-white/80 backdrop-blur-md shadow-sm border-none hover:bg-white transition-all scale-0 group-hover:scale-100"
+                    className="w-8 h-8 rounded-xl bg-white/80 backdrop-blur-md shadow-sm border-none hover:bg-white transition-all scale-100 md:scale-0 md:group-hover:scale-100"
                   />
                 }
               >
@@ -72,18 +72,18 @@ export const ProductCard = memo(function ProductCard({ product, onAddToCart }: P
             {product.category}
           </Badge>
         </div>
-        <CardContent className="p-4 space-y-2">
+        <CardContent className="p-3 md:p-4 space-y-2">
           <div className="space-y-0.5">
             <h3 className="font-black text-gray-900 line-clamp-1 text-sm leading-tight tracking-tight">{product.name}</h3>
             <p className="text-[10px] text-gray-400 font-bold line-clamp-1 uppercase tracking-tight">{product.description}</p>
           </div>
           
           <div className="pt-2 flex items-center justify-between border-t border-gray-50 mt-2">
-            <div className="flex flex-col">
+            <div className="flex flex-col text-left">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-lg font-black text-gray-900 tracking-tighter">₹{product.price}</span>
+                <span className="text-base md:text-lg font-black text-gray-900 tracking-tighter">₹{product.price}</span>
                 {product.mrp && product.mrp > product.price && (
-                  <span className="text-[10px] text-gray-300 font-bold line-through">₹{product.mrp}</span>
+                  <span className="text-[8px] md:text-[10px] text-gray-300 font-bold line-through">₹{product.mrp}</span>
                 )}
               </div>
             </div>
@@ -91,9 +91,9 @@ export const ProductCard = memo(function ProductCard({ product, onAddToCart }: P
               onClick={() => onAddToCart(product)}
               disabled={!isAvailable}
               size="sm"
-              className="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] h-10 px-6 rounded-2xl shadow-lg shadow-red-100 active:scale-95 transition-all uppercase tracking-widest"
+              className="bg-red-600 hover:bg-red-700 text-white font-black text-[9px] md:text-[10px] h-9 md:h-10 px-4 md:px-6 rounded-xl md:rounded-2xl shadow-lg shadow-red-100 active:scale-95 transition-all uppercase tracking-widest"
             >
-              {isAvailable ? 'Buy Now' : 'Sold Out'}
+              {isAvailable ? 'Buy' : 'Sold'}
             </Button>
           </div>
         </CardContent>

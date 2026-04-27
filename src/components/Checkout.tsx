@@ -134,31 +134,31 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
   }
 
   return (
-    <div className="max-w-2xl mx-auto pb-20">
-      <div className="flex items-center gap-4 mb-8">
+    <div className="max-w-2xl mx-auto pb-32 md:pb-20">
+      <div className="flex items-center gap-4 mb-6 md:mb-8">
         <Button variant="ghost" onClick={onBack} size="icon" className="rounded-full hover:bg-sky-50 text-sky-600">
           <ArrowLeft className="w-6 h-6" />
         </Button>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Checkout</h1>
+        <h1 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">Checkout</h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         <div className="space-y-6">
           <section className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
                 <MapPin className="w-4 h-4 text-sky-600" />
               </div>
-              <h2 className="font-black text-gray-900 tracking-tight uppercase text-xs">Delivery Address</h2>
+              <h2 className="font-black text-gray-900 tracking-tight uppercase text-[10px] md:text-xs">Delivery Address</h2>
             </div>
             
             <Card className="border-none shadow-sm bg-gray-50/50 rounded-2xl overflow-hidden">
-              <CardContent className="p-6 space-y-4">
+              <CardContent className="p-5 md:p-6 space-y-4">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Full Name</Label>
                   <Input 
                     required 
-                    className="bg-white border-gray-100 rounded-xl focus:ring-sky-500"
+                    className="bg-white border-gray-100 rounded-xl focus:ring-sky-500 h-11 md:h-12"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
@@ -171,7 +171,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                       type="button"
                       onClick={handleGetLocation}
                       disabled={isLocating}
-                      className="text-[10px] font-black text-sky-600 uppercase tracking-widest flex items-center gap-1"
+                      className="text-[10px] font-black text-sky-600 uppercase tracking-widest flex items-center gap-1 bg-sky-50 px-2 py-1 rounded-lg"
                     >
                       {isLocating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
                       Auto Detect
@@ -179,19 +179,19 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                   </div>
                   <Input 
                     required 
-                    className="bg-white border-gray-100 rounded-xl focus:ring-sky-500"
+                    className="bg-white border-gray-100 rounded-xl focus:ring-sky-500 h-11 md:h-12"
                     value={formData.houseNumber}
                     onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pincode</Label>
                     <Input 
                       required 
                       placeholder="814152"
-                      className={`bg-white border-gray-100 rounded-xl focus:ring-sky-500 ${formData.pincode && formData.pincode !== VALID_PINCODE ? "border-red-500" : ""}`}
+                      className={`bg-white border-gray-100 rounded-xl focus:ring-sky-500 h-11 md:h-12 ${formData.pincode && formData.pincode !== VALID_PINCODE ? "border-red-500" : ""}`}
                       value={formData.pincode}
                       onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
                     />
@@ -201,7 +201,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                     <Input 
                       required 
                       type="tel"
-                      className="bg-white border-gray-100 rounded-xl focus:ring-sky-500"
+                      className="bg-white border-gray-100 rounded-xl focus:ring-sky-500 h-11 md:h-12"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     />
@@ -218,11 +218,11 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
               <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
                 <IndianRupee className="w-4 h-4 text-sky-600" />
               </div>
-              <h2 className="font-black text-gray-900 tracking-tight uppercase text-xs">Payment Summary</h2>
+              <h2 className="font-black text-gray-900 tracking-tight uppercase text-[10px] md:text-xs">Payment Summary</h2>
             </div>
 
             <Card className="border-none shadow-sm bg-gray-50/50 rounded-2xl overflow-hidden">
-              <CardContent className="p-6 space-y-4">
+              <CardContent className="p-5 md:p-6 space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm font-bold text-gray-500">
                     <span>Subtotal</span>
@@ -249,17 +249,30 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                   </div>
                 </div>
 
-                <Button 
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="w-full bg-sky-600 hover:bg-sky-700 text-white py-8 text-lg font-black rounded-2xl shadow-lg shadow-sky-100 active:scale-95 transition-all mt-4"
-                >
-                  {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : `Pay ₹${total}`}
-                </Button>
+                <div className="hidden md:block">
+                  <Button 
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="w-full bg-sky-600 hover:bg-sky-700 text-white h-14 md:h-16 text-lg font-black rounded-2xl shadow-lg shadow-sky-100 active:scale-95 transition-all mt-4"
+                  >
+                    {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : `Pay ₹${total}`}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </section>
         </div>
+      </div>
+
+      {/* Mobile Sticky CTA */}
+      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm md:hidden z-50">
+        <Button 
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className="w-full bg-red-600 hover:bg-red-700 text-white h-14 md:h-16 text-lg font-black rounded-2xl shadow-2xl active:scale-95 transition-all"
+        >
+          {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : `Place Order • ₹${total}`}
+        </Button>
       </div>
     </div>
   );

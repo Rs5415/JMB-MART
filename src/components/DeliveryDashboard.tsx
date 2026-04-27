@@ -127,27 +127,27 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2">
+        <div className="flex flex-col gap-2 text-center md:text-left">
+          <div className="flex items-center justify-center md:justify-start gap-2">
             <div className="bg-red-600 p-2 rounded-xl">
-              <Bike className="w-6 h-6 text-white" />
+              <Bike className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
-            <h1 className="text-4xl font-black text-gray-900 tracking-tighter">Delivery HQ</h1>
+            <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tighter">Delivery HQ</h1>
           </div>
-          <p className="text-gray-500 font-bold">Partner Portal • JMB MART</p>
+          <p className="text-gray-500 font-bold text-sm">Partner Portal • JMB MART</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 w-full md:w-auto">
           <Button 
             variant="outline" 
-            className="rounded-2xl border-gray-200 font-black h-12 px-6 shadow-sm hover:bg-gray-50"
+            className="flex-1 md:flex-none rounded-2xl border-gray-200 font-black h-14 md:h-12 px-6 shadow-sm hover:bg-gray-50"
             onClick={onBack}
           >
             <Home className="w-5 h-5 mr-2" /> SHOP
           </Button>
           <Button 
             variant="outline" 
-            className="rounded-2xl border-red-100 text-red-600 hover:bg-red-50 font-black h-12 px-6 shadow-sm"
+            className="flex-1 md:flex-none rounded-2xl border-red-100 text-red-600 hover:bg-red-50 font-black h-14 md:h-12 px-6 shadow-sm"
             onClick={handleLogout}
           >
             <LogOut className="w-5 h-5 mr-2" /> LOGOUT
@@ -156,55 +156,51 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
       </header>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-none shadow-sm rounded-3xl bg-white p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-blue-50 rounded-2xl">
-              <Package className="w-6 h-6 text-blue-600" />
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+        <Card className="border-none shadow-sm rounded-3xl bg-white p-4 md:p-6">
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <div className="p-2 md:p-3 bg-blue-50 rounded-xl md:rounded-2xl">
+              <Package className="w-4 h-4 md:w-6 md:h-6 text-blue-600" />
             </div>
-            <Badge className="bg-blue-100 text-blue-700 border-none font-black uppercase text-[10px]">Active</Badge>
           </div>
-          <p className="text-3xl font-black text-gray-900">{stats.active}</p>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Pending Deliveries</p>
+          <p className="text-2xl md:text-3xl font-black text-gray-900">{stats.active}</p>
+          <p className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Active</p>
         </Card>
-        <Card className="border-none shadow-sm rounded-3xl bg-white p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-green-50 rounded-2xl">
-              <CheckCircle2 className="w-6 h-6 text-green-600" />
+        <Card className="border-none shadow-sm rounded-3xl bg-white p-4 md:p-6">
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <div className="p-2 md:p-3 bg-green-50 rounded-xl md:rounded-2xl">
+              <CheckCircle2 className="w-4 h-4 md:w-6 md:h-6 text-green-600" />
             </div>
-            <Badge className="bg-green-100 text-green-700 border-none font-black uppercase text-[10px]">Success</Badge>
           </div>
-          <p className="text-3xl font-black text-gray-900">{stats.completed}</p>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Total Completed</p>
+          <p className="text-2xl md:text-3xl font-black text-gray-900">{stats.completed}</p>
+          <p className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Done</p>
         </Card>
-        <Card className="border-none shadow-sm rounded-3xl bg-white p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-red-50 rounded-2xl">
-              <Wallet className="w-6 h-6 text-red-600" />
+        <Card className="border-none shadow-sm rounded-3xl bg-white p-4 md:p-6 col-span-2 md:col-span-1">
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <div className="p-2 md:p-3 bg-red-50 rounded-xl md:rounded-2xl">
+              <Wallet className="w-4 h-4 md:w-6 md:h-6 text-red-600" />
             </div>
-            <Badge className="bg-red-100 text-red-700 border-none font-black uppercase text-[10px]">Earnings</Badge>
           </div>
           <div className="flex items-baseline gap-1">
-            <p className="text-3xl font-black text-gray-900">₹{stats.earnings}</p>
-            <p className="text-xs font-bold text-gray-400">total</p>
+            <p className="text-2xl md:text-3xl font-black text-gray-900">₹{stats.earnings}</p>
           </div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Wallet Balance</p>
+          <p className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Earnings</p>
         </Card>
       </div>
 
       <Tabs defaultValue="active" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="flex w-full bg-gray-100 p-1 rounded-2xl h-14 mb-8">
-          <TabsTrigger value="active" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
-            <LayoutDashboard className="w-3 h-3" /> Active Tasks
+        <TabsList className="bg-gray-100 p-1 rounded-2xl h-14 mb-8 flex w-full overflow-x-auto scrollbar-hide flex-nowrap justify-start md:justify-around md:flex-wrap">
+          <TabsTrigger value="active" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center gap-2 px-4 whitespace-nowrap">
+            <LayoutDashboard className="w-3 h-3" /> Active
           </TabsTrigger>
-          <TabsTrigger value="map" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
-            <Navigation className="w-3 h-3" /> Navigation
+          <TabsTrigger value="map" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center gap-2 px-4 whitespace-nowrap">
+            <Navigation className="w-3 h-3" /> Map
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
+          <TabsTrigger value="history" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center gap-2 px-4 whitespace-nowrap">
             <History className="w-3 h-3" /> History
           </TabsTrigger>
-          <TabsTrigger value="settings" className="flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
-            <Settings className="w-3 h-3" /> Settings
+          <TabsTrigger value="settings" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center gap-2 px-4 whitespace-nowrap">
+            <Settings className="w-3 h-3" /> Profile
           </TabsTrigger>
         </TabsList>
 

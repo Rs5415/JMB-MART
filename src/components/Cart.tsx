@@ -59,23 +59,23 @@ export function Cart({ items, onUpdateQuantity, onRemove, onCheckout }: CartProp
                 <p className="text-xs font-black text-red-700 mt-1">₹{item.price}</p>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center bg-red-600 text-white rounded-lg h-8 px-1 shadow-sm">
+                <div className="flex items-center bg-red-600 text-white rounded-xl h-10 px-1 shadow-sm">
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-6 w-6 text-white hover:bg-red-700 hover:text-white"
+                    className="h-8 w-8 text-white hover:bg-red-700 hover:text-white"
                     onClick={() => onUpdateQuantity(item.id, -1)}
                   >
-                    <Minus className="w-3 h-3" />
+                    <Minus className="w-4 h-4" />
                   </Button>
-                  <span className="text-xs font-black w-6 text-center">{item.quantity}</span>
+                  <span className="text-sm font-black w-7 text-center">{item.quantity}</span>
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-6 w-6 text-white hover:bg-red-700 hover:text-white"
+                    className="h-8 w-8 text-white hover:bg-red-700 hover:text-white"
                     onClick={() => onUpdateQuantity(item.id, 1)}
                   >
-                    <Plus className="w-3 h-3" />
+                    <Plus className="w-4 h-4" />
                   </Button>
                 </div>
                 <button 

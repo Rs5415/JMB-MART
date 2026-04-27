@@ -69,24 +69,24 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
   };
 
   return (
-    <nav className={`sticky top-0 z-40 w-full bg-white border-b border-gray-100 transition-all duration-300 ${isSpecialView ? 'bg-red-900 text-white' : 'text-gray-900'}`}>
-      <div className="container mx-auto px-4 py-2 md:py-3">
+    <nav className={`sticky top-0 z-40 w-full bg-white/80 backdrop-blur-xl border-b border-gray-100 transition-all duration-300 ${isSpecialView ? 'bg-red-900 text-white' : 'text-gray-900'}`}>
+      <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           {/* Logo & Location */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-2.5">
-              <BrandLogo className="w-10 h-10 md:w-11 md:h-11 shadow-sm" variant={isSpecialView ? "white" : "default"} />
+              <BrandLogo className="w-9 h-9 md:w-11 md:h-11 shadow-sm" variant={isSpecialView ? "white" : "default"} />
               <div className="flex flex-col">
                 <div className="flex items-center gap-0.5">
-                  <span className={`font-black text-xl md:text-2xl tracking-tighter ${isSpecialView ? 'text-white' : 'text-red-600'}`}>JMB</span>
-                  <span className={`font-black text-xl md:text-2xl tracking-tighter pl-1 ${isSpecialView ? 'text-white' : 'text-gray-900'}`}>{isAdminView ? 'ADMIN' : isDeliveryView ? 'DELIVERY' : 'MART'}</span>
+                  <span className={`font-black text-lg md:text-2xl tracking-tighter ${isSpecialView ? 'text-white' : 'text-red-600'}`}>JMB</span>
+                  <span className={`font-black text-lg md:text-2xl tracking-tighter pl-1 ${isSpecialView ? 'text-white' : 'text-gray-900'}`}>{isAdminView ? 'ADMIN' : isDeliveryView ? 'DELIVERY' : 'MART'}</span>
                   {!isSpecialView && (
-                    <Badge variant="outline" className={`ml-2 text-[8px] font-black uppercase tracking-tighter rounded-full px-2 py-0 h-4 ${new Date().getHours() >= 6 && new Date().getHours() < 22 ? 'border-green-500 text-green-600 bg-green-50' : 'border-gray-300 text-gray-400 bg-gray-50'}`}>
+                    <Badge variant="outline" className={`ml-2 text-[7px] md:text-[8px] font-black uppercase tracking-tighter rounded-full px-1.5 py-0 h-3.5 md:h-4 ${new Date().getHours() >= 6 && new Date().getHours() < 22 ? 'border-green-500 text-green-600 bg-green-50' : 'border-gray-300 text-gray-400 bg-gray-50'}`}>
                       {new Date().getHours() >= 6 && new Date().getHours() < 22 ? 'OPEN' : 'CLOSED'}
                     </Badge>
                   )}
                 </div>
-                <div className={`text-[7px] md:text-[8px] font-black tracking-[0.25em] leading-none ${isSpecialView ? 'text-red-200' : 'text-red-600'}`}>
+                <div className={`text-[6px] md:text-[8px] font-black tracking-[0.2em] md:tracking-[0.25em] leading-none ${isSpecialView ? 'text-red-200' : 'text-red-600'}`}>
                   JAI MAA BHAVANI
                 </div>
               </div>
@@ -125,9 +125,9 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
                 variant="outline" 
                 size="sm" 
                 onClick={() => onSearch('')} 
-                className="border-white/20 text-white hover:bg-white/10 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
+                className="border-white/20 text-white hover:bg-white/10 font-black rounded-xl text-[10px] uppercase tracking-widest h-10 px-4"
               >
-                Go to Shop
+                Shop
               </Button>
             ) : (
               <>
@@ -136,10 +136,10 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
                     variant="outline" 
                     size="sm" 
                     onClick={() => onSearch('admin')} 
-                    className="flex border-red-200 text-red-600 hover:bg-red-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4"
+                    className="hidden md:flex border-red-200 text-red-600 hover:bg-red-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-10 px-4"
                   >
-                    <ShieldCheck className="w-4 h-4 md:mr-2" /> 
-                    <span className="hidden md:inline">Admin Panel</span>
+                    <ShieldCheck className="w-4 h-4 mr-2" /> 
+                    <span>Admin Panel</span>
                   </Button>
                 )}
                 {userRole === 'delivery' && (
@@ -147,10 +147,10 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
                     variant="outline" 
                     size="sm" 
                     onClick={() => onSearch('delivery-dashboard')} 
-                    className="flex relative border-red-200 text-red-600 hover:bg-red-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-11 px-4 overflow-visible"
+                    className="hidden md:flex relative border-red-200 text-red-600 hover:bg-red-50 font-black rounded-xl text-[10px] uppercase tracking-widest h-10 px-4 overflow-visible"
                   >
-                    <Navigation className="w-4 h-4 md:mr-2" /> 
-                    <span className="hidden md:inline">Delivery Portal</span>
+                    <Navigation className="w-4 h-4 mr-2" /> 
+                    <span>Delivery Portal</span>
                     {deliveryCount > 0 && (
                       <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow-lg">
                         {deliveryCount}
@@ -166,11 +166,6 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
                       <span className="text-[8px] font-bold text-red-600 mt-0.5">{userProfile.phoneNumber}</span>
                     </div>
                   </div>
-                ) : userRole ? (
-                   <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
-                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
-                    <span className="text-[10px] font-black text-gray-400 leading-none">Loading Profile...</span>
-                  </div>
                 ) : (
                   <Button 
                     variant="ghost" 
@@ -181,15 +176,23 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
                   </Button>
                 )}
                 <Button 
-                  className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl px-4 md:px-6 h-11 flex items-center gap-2 shadow-md active:scale-95 transition-all"
+                  className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl px-4 md:px-6 h-10 md:h-11 flex items-center gap-2 shadow-md active:scale-95 transition-all md:flex hidden"
                   onClick={onOpenCart}
                 >
                   <ShoppingCart className="w-5 h-5" />
                   <div className="hidden sm:flex flex-col items-start leading-none">
                     <span className="text-[10px] opacity-80 uppercase tracking-wider">My Cart</span>
-                    <span className="text-sm">{cartCount} {cartCount === 1 ? 'Item' : 'Items'}</span>
+                    <span className="text-sm">{cartCount} Items</span>
                   </div>
-                  <span className="sm:hidden text-sm font-black">{cartCount}</span>
+                </Button>
+                {/* Mobile Voice Search Trigger */}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={`md:hidden rounded-xl w-10 h-10 ${isListening ? 'text-red-500 bg-red-50' : 'text-gray-400'}`}
+                  onClick={startVoiceSearch}
+                >
+                  <Mic className="w-5 h-5" />
                 </Button>
               </>
             )}
