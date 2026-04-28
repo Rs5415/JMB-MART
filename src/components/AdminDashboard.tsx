@@ -6,17 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup, Users, FileUp, Download, Check, Ban, UserCheck, LayoutGrid, Tag, MapPin, Navigation, Percent, BarChart2, TrendingUp } from "lucide-react";
+import { ShoppingBag, XCircle, Clock, Plus, Loader2, Package, IndianRupee, Sparkles, CheckCircle2, Trash2, AlertCircle, RefreshCw, EyeOff, Eye, DatabaseBackup, Users, FileUp, Download, Check, Ban, UserCheck, LayoutGrid, Tag, MapPin, Navigation, Percent, BarChart2, TrendingUp, ReceiptText } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ImageGenerator } from "@/src/components/ImageGenerator";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "motion/react";
+import { OrderBill } from "@/src/components/OrderBill";
 import { products as initialProducts } from "@/src/data/products";
 import Papa from 'papaparse';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
 
 export function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [selectedOrderForBill, setSelectedOrderForBill] = useState<any | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -859,33 +861,45 @@ export function AdminDashboard() {
                           </div>
                         )}
                       </div>
-                      <div className="flex flex-col justify-between items-end gap-6">
-                        <div className="text-right">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Bill</p>
-                          <p className="text-3xl font-black text-gray-900 tracking-tighter">₹{order.total}</p>
-                        </div>
-                        {order.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <Button 
-                              size="sm" 
-                              className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl px-6 h-10 shadow-md active:scale-95 transition-all"
-                              onClick={() => handleUpdateOrderStatus(order.id, 'delivered')}
-                            >
-                              <CheckCircle2 className="w-4 h-4 mr-2" /> Deliver
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50 font-black rounded-xl px-6 h-10"
-                              onClick={() => handleUpdateOrderStatus(order.id, 'cancelled')}
-                            >
-                              <XCircle className="w-4 h-4 mr-2" /> Cancel
-                            </Button>
+                        <div className="flex flex-col justify-between items-end gap-6">
+                          <div className="text-right">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Bill</p>
+                            <p className="text-3xl font-black text-gray-900 tracking-tighter">₹{order.total}</p>
                           </div>
-                        )}
+                          
+                          <div className="flex flex-col items-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl font-black text-[10px] uppercase tracking-widest h-10 px-6 shadow-sm flex items-center gap-2"
+                              onClick={() => setSelectedOrderForBill(order)}
+                            >
+                              <ReceiptText className="w-4 h-4" /> View Bill
+                            </Button>
+
+                            {order.status === 'pending' && (
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm" 
+                                  className="bg-red-600 hover:bg-red-700 text-white font-black rounded-xl px-6 h-10 shadow-md active:scale-95 transition-all"
+                                  onClick={() => handleUpdateOrderStatus(order.id, 'delivered')}
+                                >
+                                  <CheckCircle2 className="w-4 h-4 mr-2" /> Deliver
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  className="text-red-500 hover:text-red-600 hover:bg-red-50 font-black rounded-xl px-6 h-10"
+                                  onClick={() => handleUpdateOrderStatus(order.id, 'cancelled')}
+                                >
+                                  <XCircle className="w-4 h-4 mr-2" /> Cancel
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                   {orders.length === 0 && (
                     <div className="py-32 text-center">
                       <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -1287,6 +1301,11 @@ export function AdminDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+      <OrderBill 
+        order={selectedOrderForBill} 
+        isOpen={!!selectedOrderForBill} 
+        onClose={() => setSelectedOrderForBill(null)} 
+      />
     </div>
   );
 }

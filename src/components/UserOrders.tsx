@@ -5,13 +5,15 @@ import { collection, query, where, onSnapshot, updateDoc, doc, getDoc } from "fi
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Package, XCircle, Clock, CheckCircle2, Loader2, ShoppingBag, Phone, Navigation, KeyRound } from "lucide-react";
+import { Package, XCircle, Clock, CheckCircle2, Loader2, ShoppingBag, Phone, Navigation, KeyRound, ReceiptText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { OrderBill } from "@/src/components/OrderBill";
 
 export function UserOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedOrderForBill, setSelectedOrderForBill] = useState<any | null>(null);
 
   const [deliveryLocations, setDeliveryLocations] = useState<{[key: string]: any}>({});
 
@@ -211,6 +213,15 @@ export function UserOrders() {
                       variant="outline" 
                       size="sm" 
                       className="border-red-100 text-red-600 hover:bg-red-50 font-black rounded-lg md:rounded-xl px-2 md:px-4 h-8 md:h-10 text-[10px] md:text-sm"
+                      onClick={() => setSelectedOrderForBill(order)}
+                    >
+                      <ReceiptText className="w-3 h-3 md:w-4 md:h-4 mr-1.5" />
+                      Bill
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="border-red-100 text-red-600 hover:bg-red-50 font-black rounded-lg md:rounded-xl px-2 md:px-4 h-8 md:h-10 text-[10px] md:text-sm"
                     >
                       Help
                     </Button>
@@ -236,6 +247,12 @@ export function UserOrders() {
           )}
         </div>
       </ScrollArea>
+
+      <OrderBill 
+        order={selectedOrderForBill} 
+        isOpen={!!selectedOrderForBill} 
+        onClose={() => setSelectedOrderForBill(null)} 
+      />
     </div>
   );
 }

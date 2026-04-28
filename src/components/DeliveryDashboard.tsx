@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Package, MapPin, CheckCircle2, Loader2, Phone, Navigation, KeyRound, Home, LogOut, History, Wallet, Settings, LayoutDashboard, Bike } from "lucide-react";
+import { Package, MapPin, CheckCircle2, Loader2, Phone, Navigation, KeyRound, Home, LogOut, History, Wallet, Settings, LayoutDashboard, Bike, ReceiptText } from "lucide-react";
+import { OrderBill } from "@/src/components/OrderBill";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,7 @@ import { signOut } from "firebase/auth";
 
 export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
   const [orders, setOrders] = useState<any[]>([]);
+  const [selectedOrderForBill, setSelectedOrderForBill] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("active");
   const [otpInputs, setOtpInputs] = useState<{[key: string]: string}>({});
@@ -264,6 +266,13 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
                         {order.status === 'assigned' && (
                           <>
                             <Button 
+                              variant="outline"
+                              className="w-full border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl h-12 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 mb-2"
+                              onClick={() => setSelectedOrderForBill(order)}
+                            >
+                              <ReceiptText className="w-4 h-4" /> VIEW BILL
+                            </Button>
+                            <Button 
                               className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black rounded-2xl h-14 shadow-lg shadow-orange-100 active:scale-95 transition-all"
                               onClick={() => handleUpdateStatus(order.id, 'out_for_delivery')}
                             >
@@ -287,6 +296,13 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
 
                         {order.status === 'out_for_delivery' && (
                           <div className="space-y-3">
+                            <Button 
+                              variant="outline"
+                              className="w-full border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl h-12 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                              onClick={() => setSelectedOrderForBill(order)}
+                            >
+                              <ReceiptText className="w-4 h-4" /> VIEW BILL
+                            </Button>
                             <div className="space-y-2">
                               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
                                 <KeyRound className="w-3 h-3" /> Customer OTP
@@ -444,6 +460,11 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
           </div>
         </TabsContent>
       </Tabs>
+      <OrderBill 
+        order={selectedOrderForBill} 
+        isOpen={!!selectedOrderForBill} 
+        onClose={() => setSelectedOrderForBill(null)} 
+      />
     </div>
   );
 }
