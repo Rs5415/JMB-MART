@@ -1,4 +1,4 @@
-import { IndianRupee, Printer, X, Download, Loader2 } from "lucide-react";
+import { IndianRupee, Printer, X, Download, Loader2, Scissors, Calendar, Hash, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
 import { useRef, useState } from "react";
@@ -32,13 +32,14 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             <title>JMB Mart - Bill #${order.id?.slice(-8).toUpperCase()}</title>
             <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
             <style>
-              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
               body { 
                 font-family: 'Inter', sans-serif; 
                 background: white;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
+              .mono { font-family: 'JetBrains Mono', monospace; }
               .print-container { padding: 40px; max-width: 800px; margin: 0 auto; }
             </style>
           </head>
@@ -79,7 +80,7 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             
             // Fix text colors
             if (el.style.color.includes('oklch') || style.color.includes('oklch')) {
-              el.style.color = '#374151'; 
+              el.style.color = '#111827'; 
             }
             
             // Fix background colors
@@ -123,7 +124,9 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
   const saveToDrive = () => {
     handleDownloadPDF();
     // Provide a tip to the user
-    alert("Bill downloaded! You can now upload this PDF to your Google Drive for permanent storage.");
+    setTimeout(() => {
+      alert("✓ Order Bill downloaded to your device!\n\nTo save permanently to Google Drive:\n1. Open your Google Drive 앱 (App)\n2. Tap the '+' icon and select 'Upload'\n3. Choose this PDF from your 'Downloads' folder.");
+    }, 1000);
   };
 
   const subtotal = order.items?.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0) || 0;
@@ -131,176 +134,280 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
   const total = order.total || (subtotal + deliveryFee);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/80 backdrop-blur-md"
           onClick={onClose}
         />
-        
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+             <motion.div
+          initial={{ scale: 0.95, opacity: 0, y: 30 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className={`bg-white w-full ${billFormat === 'a4' ? 'max-w-lg' : 'max-w-[320px]'} rounded-[2.5rem] shadow-2xl relative overflow-hidden print:shadow-none print:rounded-none print:m-0 transition-all duration-500`}
+          exit={{ scale: 0.95, opacity: 0, y: 30 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className={`bg-white w-full ${billFormat === 'a4' ? 'max-w-2xl' : 'max-w-[340px]'} rounded-[2.5rem] shadow-[-20px_20px_60px_-15px_rgba(0,0,0,0.3)] relative overflow-hidden print:shadow-none print:rounded-none print:m-0 transition-all duration-700 ease-in-out border border-white/20`}
         >
-          {/* Format Selector (Hidden in Print) */}
-          <div className="absolute top-6 left-6 flex bg-gray-100 p-1 rounded-xl z-10 print:hidden">
-            <button 
-              onClick={() => setBillFormat('a4')}
-              className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all ${billFormat === 'a4' ? 'bg-white shadow-sm text-red-600' : 'text-gray-400'}`}
-            >
-              A4 Invoice
-            </button>
-            <button 
-              onClick={() => setBillFormat('receipt')}
-              className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all ${billFormat === 'receipt' ? 'bg-white shadow-sm text-red-600' : 'text-gray-400'}`}
-            >
-              Bill Size
-            </button>
-          </div>
-
-          {/* Header Controls (Hidden in Print) */}
-          <div className="absolute top-6 right-6 flex gap-2 print:hidden z-10">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={saveToDrive}
-              disabled={isGenerating}
-              className="rounded-full bg-white/80 backdrop-blur-md border-gray-100 hover:bg-gray-50 h-10 w-10 shadow-sm"
-              title="Save to Drive"
-            >
-              {isGenerating ? <Loader2 className="w-5 h-5 animate-spin text-red-600" /> : <div className="w-5 h-5 flex items-center justify-center"><img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-4 h-4" alt="Drive" /></div>}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={handleDownloadPDF}
-              disabled={isGenerating}
-              className="rounded-full bg-white/80 backdrop-blur-md border-gray-100 hover:bg-gray-50 h-10 w-10 shadow-sm"
-              title="Download PDF"
-            >
-              {isGenerating ? <Loader2 className="w-5 h-5 animate-spin text-red-600" /> : <Download className="w-5 h-5 text-gray-600" />}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={handlePrint}
-              className="rounded-full bg-white/80 backdrop-blur-md border-gray-100 hover:bg-gray-50 h-10 w-10 shadow-sm"
-              title="Print Bill"
-            >
-              <Printer className="w-5 h-5 text-gray-600" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={onClose}
-              className="rounded-full bg-white/80 backdrop-blur-md border-gray-100 hover:bg-gray-50 h-10 w-10 shadow-sm"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </Button>
-          </div>
-
-          <div ref={billRef} className="p-8 md:p-10 print:p-0 bg-white" style={{ backgroundColor: '#ffffff' }}>
-            {/* JMB MART BRANDING */}
-            <div className="text-center space-y-2 mb-10">
-              <div 
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-white rounded-2xl"
-                style={{ backgroundColor: '#dc2626' }}
+          {/* Header Controls (Always Visible) */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/80 backdrop-blur-xl border-b border-gray-100 p-6 z-20 print:hidden">
+            {/* Format Selection */}
+            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200/50">
+              <button 
+                onClick={() => setBillFormat('a4')}
+                className={`text-[10px] font-black uppercase px-4 py-2 rounded-lg transition-all ${billFormat === 'a4' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
               >
-                <span className="font-black text-xl tracking-tighter">JMB</span>
-                <span className="font-black text-xl tracking-tighter opacity-80">MART</span>
-              </div>
-              <h1 className="text-sm font-black tracking-[0.4em] uppercase mt-2" style={{ color: '#dc2626' }}>Jai Maa Bhavani</h1>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest" style={{ color: '#9ca3af' }}>Premium Quality • Express Delivery</p>
+                A4 Invoice
+              </button>
+              <button 
+                onClick={() => setBillFormat('receipt')}
+                className={`text-[10px] font-black uppercase px-4 py-2 rounded-lg transition-all ${billFormat === 'receipt' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Bill Size
+              </button>
             </div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={saveToDrive}
+                disabled={isGenerating}
+                className="rounded-xl bg-white hover:bg-gray-50 h-10 px-4 border-gray-200 gap-2 font-bold text-xs"
+              >
+                <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-4 h-4" alt="Drive" />
+                <span className="hidden xs:inline">Save to Drive</span>
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDownloadPDF}
+                disabled={isGenerating}
+                className="rounded-xl bg-white hover:bg-gray-50 h-10 px-4 border-gray-200 gap-2 font-bold text-xs text-gray-700"
+              >
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <span className="hidden xs:inline">PDF</span>
+              </Button>
 
-            {/* BILL INFO */}
-            <div className="grid grid-cols-2 gap-8 mb-8 pb-8 border-b-2 border-dashed border-gray-100" style={{ borderBottomColor: '#f3f4f6' }}>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#9ca3af' }}>Order Details</p>
-                <p className="text-sm font-black tracking-tight" style={{ color: '#111827' }}>Invoice #{order.id?.slice(-8).toUpperCase()}</p>
-                <p className="text-xs font-bold" style={{ color: '#6b7280' }}>{order.createdAt?.toDate().toLocaleString()}</p>
-              </div>
-              <div className="space-y-1 text-right">
-                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#9ca3af' }}>Payment Method</p>
-                <p className="text-sm font-black tracking-tight" style={{ color: '#111827' }}>Cash on Delivery</p>
-                <Badge className="font-black text-[9px] uppercase tracking-widest px-2 mt-1" style={{ backgroundColor: '#dcfce7', color: '#15803d', border: 'none' }}>Confirmed</Badge>
-              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handlePrint}
+                className="rounded-xl bg-white hover:bg-gray-50 h-10 px-4 border-gray-200 gap-2 font-bold text-xs text-gray-700"
+              >
+                <Printer className="w-4 h-4" />
+                <span className="hidden xs:inline">Print</span>
+              </Button>
+
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={onClose}
+                className="rounded-full hover:bg-red-50 h-10 w-10 text-gray-400 hover:text-red-500 ml-2"
+              >
+                <X className="w-5 h-5" />
+              </Button>
             </div>
+          </div>
 
-            {/* CUSTOMER INFO */}
-            <div className="mb-8 space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#9ca3af' }}>Delivery To</p>
-              <p className="text-sm font-black" style={{ color: '#111827' }}>{order.address?.name}</p>
-              <p className="text-xs font-bold leading-relaxed max-w-[250px]" style={{ color: '#6b7280' }}>
-                {order.address?.houseNumber}, {order.address?.pincode}
-              </p>
-              <p className="text-xs font-black mt-1 whitespace-nowrap" style={{ color: '#dc2626' }}>{order.address?.phone}</p>
-            </div>
-
-            {/* ITEMS TABLE */}
-            <div className="space-y-4 mb-8">
-              <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest px-2" style={{ color: '#9ca3af' }}>
-                <span>Item Description</span>
-                <span>Subtotal</span>
-              </div>
-              <div className="space-y-4">
-                {order.items?.map((item: any, i: number) => (
-                  <div key={i} className="flex justify-between items-start gap-4 px-2">
-                    <div className="flex-1">
-                      <p className="text-sm font-black tracking-tight leading-none" style={{ color: '#111827' }}>{item.name}</p>
-                      <p className="text-[10px] font-bold mt-1 uppercase tracking-tighter" style={{ color: '#9ca3af' }}>
-                        ₹{item.price} × {item.quantity}
-                      </p>
-                    </div>
-                    <p className="text-sm font-black tracking-tighter" style={{ color: '#111827' }}>₹{item.price * item.quantity}</p>
-                  </div>
+          <div ref={billRef} className="bg-white" style={{ backgroundColor: '#ffffff' }}>
+            {/* PERFORATED TOP (Receipt Style) */}
+            {billFormat === 'receipt' && (
+              <div className="h-6 w-full flex justify-between px-2 overflow-hidden gap-1 mt-4">
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="w-4 h-4 bg-gray-50 rounded-full shrink-0 -mt-2 border border-gray-100" />
                 ))}
               </div>
-            </div>
+            )}
 
-            {/* TOTALS */}
-            <div className="rounded-[2rem] p-6 space-y-3" style={{ backgroundColor: '#f9fafb' }}>
-              <div className="flex justify-between items-center text-sm">
-                <span className="font-bold" style={{ color: '#6b7280' }}>Subtotal</span>
-                <span className="font-black" style={{ color: '#111827' }}>₹{subtotal}</span>
+            <div className={`p-10 ${billFormat === 'receipt' ? 'pt-2' : 'pt-20'} transition-all duration-700`}>
+              {/* BRANDING HEADER */}
+              <div className="flex flex-col items-center mb-12 text-center">
+                <div 
+                  className="flex items-center justify-center w-16 h-16 rounded-[1.5rem] rotate-6 mb-6 shadow-2xl shadow-red-100 border-4 border-white"
+                  style={{ backgroundColor: '#dc2626' }}
+                >
+                  <span className="font-black text-2xl text-white -rotate-6">JM</span>
+                </div>
+                <h1 className="text-2xl font-black tracking-tighter text-gray-900 mb-1 uppercase">JMB Mart</h1>
+                <div className="flex items-center gap-2 px-3 py-1 bg-red-50 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse" />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-red-600">Official Invoice</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="font-bold" style={{ color: '#6b7280' }}>Delivery Fee</span>
-                <span className="font-black" style={{ color: '#111827' }}>₹{deliveryFee}</span>
+
+              {/* META INFO GRID */}
+              <div className="grid grid-cols-2 gap-px bg-gray-100 border border-gray-100 rounded-2xl overflow-hidden mb-12 shadow-sm">
+                <div className="bg-white p-5 space-y-1">
+                  <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                    <Hash className="w-3 h-3" />
+                    <span className="text-[9px] font-black uppercase tracking-widest">Order ID</span>
+                  </div>
+                  <p className="text-sm font-bold font-mono text-gray-900">#{order.id?.slice(-8).toUpperCase()}</p>
+                </div>
+                <div className="bg-white p-5 space-y-1">
+                  <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                    <Calendar className="w-3 h-3" />
+                    <span className="text-[9px] font-black uppercase tracking-widest">Placed On</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-900 truncate">
+                    {order.createdAt?.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+                <div className="bg-white p-5 space-y-1">
+                  <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                    <CreditCard className="w-3 h-3" />
+                    <span className="text-[9px] font-black uppercase tracking-widest">Payment</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-900">COD/Cash</p>
+                </div>
+                <div className="bg-white p-5 space-y-1">
+                  <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                    <span className="text-[9px] font-black uppercase tracking-widest">Payment Status</span>
+                  </div>
+                  <p className="text-sm font-bold text-green-600">UNPAID</p>
+                </div>
               </div>
-              <div className="pt-3 mt-3 border-t-2 border-white flex justify-between items-center" style={{ borderTopColor: '#ffffff' }}>
-                <span className="text-lg font-black uppercase tracking-tighter italic" style={{ color: '#111827' }}>Total Bill</span>
-                <div className="text-right">
-                  <div className="flex items-center gap-1" style={{ color: '#dc2626' }}>
-                    <span className="text-2xl font-black tracking-tighter leading-none">₹{total}</span>
-                    <span className="text-[10px] font-black uppercase tracking-widest leading-none">INR</span>
+
+              {/* CUSTOMER SECTION */}
+              <div className="mb-12 border-l-4 border-red-600 pl-6 py-2 bg-red-50/30 rounded-r-2xl">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600/50 block mb-2">Delivery Address</span>
+                <h3 className="text-lg font-black text-gray-900 leading-none mb-2">{order.address?.name}</h3>
+                <p className="text-xs font-semibold text-gray-600 max-w-[280px] leading-relaxed">
+                  {order.address?.houseNumber}, {order.address?.pincode}
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white text-[10px] font-black text-gray-900 rounded-xl border border-gray-100 shadow-sm">
+                  <span className="text-red-600">TEL</span> {order.address?.phone}
+                </div>
+              </div>
+
+              {/* ITEMS SECTION */}
+              <div className="space-y-6 mb-12">
+                <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1">
+                  <span className="flex-1">Items Description</span>
+                  <span className="w-20 text-right">Price</span>
+                  <span className="w-20 text-right">Total</span>
+                </div>
+                
+                <div className="h-px bg-gray-100 w-full" />
+
+                <div className="space-y-8">
+                  {order.items?.map((item: any, i: number) => (
+                    <div key={i} className="flex items-start gap-4 px-1 group">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black text-gray-900 tracking-tight mb-1">{item.name}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-gray-400">Qty {item.quantity}</span>
+                          <span className="w-1 h-1 bg-gray-200 rounded-full" />
+                          <span className="text-[11px] font-bold text-gray-400">Rate ₹{item.price}</span>
+                        </div>
+                      </div>
+                      <div className="w-20 text-right self-center">
+                        <p className="text-xs font-bold text-gray-400 font-mono">₹{item.price}</p>
+                      </div>
+                      <div className="w-20 text-right self-center">
+                        <p className="text-sm font-black text-gray-900 font-mono tracking-tighter">₹{item.price * item.quantity}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-6 border-t border-dashed border-gray-200" />
+              </div>
+
+              {/* FINANCIALS */}
+              <div className="space-y-4 mb-12 bg-gray-900 p-8 rounded-[2rem] text-white shadow-2xl shadow-gray-200">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-white/40 uppercase tracking-widest">Sub-Total</span>
+                  <span className="font-bold text-white">₹{subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-white/40 uppercase tracking-widest">Delivery Charge</span>
+                  <span className="font-bold text-white">₹{deliveryFee.toFixed(2)}</span>
+                </div>
+                
+                <div className="pt-6 mt-6 border-t border-white/10 flex justify-between items-center">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-red-500 mb-1">Amount Due</p>
+                    <p className="text-[10px] text-white/40 font-medium">Inclusive of all taxes</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-black text-red-500 leading-none">₹</span>
+                      <span className="text-4xl font-black tracking-tighter text-white leading-none italic">{total}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scan to Pay Section */}
+                <div className="mt-8 pt-8 border-t border-white/5 flex flex-col items-center">
+                  <div className="bg-white p-3 rounded-2xl shadow-xl mb-4 group/qr transition-transform hover:scale-110 duration-500">
+                    <img 
+                      src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=archanasharma993151@okaxis&pn=JMB%20Mart&tn=Order%20Payment&cu=INR" 
+                      className="w-32 h-32" 
+                      alt="Payment QR" 
+                    />
+                    <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] opacity-0 group-hover/qr:opacity-100 transition-opacity flex items-center justify-center rounded-2xl pointer-events-none">
+                      <span className="text-[8px] font-bold text-gray-900 bg-white/90 px-2 py-1 rounded-full shadow-sm">PAY NOW</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500">Scan to Pay via G-Pay/UPI</p>
+                    <p className="text-[8px] font-medium text-white/30 uppercase tracking-widest">Safe & Secure Transaction</p>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* FOOTER */}
-            <div className="mt-10 text-center space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.4em]" style={{ color: '#d1d5db' }}>Thank you for shopping at JMB Mart!</p>
-              <div className="flex items-center justify-center gap-4">
-                <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#f9fafb' }}>
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=JMB-MART-BILL" className="w-8 h-8 opacity-20" alt="QR" />
+              {/* SIGNATURE / FOOTER */}
+              <div className="flex flex-col items-center text-center">
+                <div className="w-full h-px bg-gray-100 mb-10" />
+                
+                <div 
+                  className="mb-8 p-6 bg-white rounded-[2rem] border-2 border-dashed border-gray-100 relative group transition-all hover:border-red-100 hover:scale-105 duration-500"
+                >
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=JMB-MART-BILL-VERIFIED-SYSTEM" className="w-24 h-24 opacity-80 mix-blend-multiply" alt="QR" />
+                  <div className="absolute -top-3 -right-3 w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg border-4 border-white rotate-12">
+                    <span className="text-[10px] font-black">OK</span>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: '#9ca3af' }}>Digital Bill</p>
-                  <p className="text-[10px] font-bold" style={{ color: '#9ca3af' }}>Scan for e-receipt</p>
+
+                <div className="space-y-2 mb-8">
+                  <p className="text-[10px] font-black uppercase tracking-[0.5em] text-gray-200 italic">Official Digital Record</p>
+                  <p className="text-[9px] font-black text-gray-400 px-10 leading-relaxed uppercase tracking-tighter">
+                    Thank you for supporting Local Enterprise. Your satisfaction is our priority.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-6 opacity-30 grayscale contrast-125">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/MasterCard_Logo.svg" className="h-4" alt="Mastercard" />
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" className="h-3" alt="Visa" />
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_Pay_Logo.svg" className="h-4" alt="Apple Pay" />
                 </div>
               </div>
             </div>
+
+            {/* CUT LINE (Receipt Style) */}
+            {billFormat === 'receipt' ? (
+              <div className="relative py-12 flex items-center justify-center overflow-hidden">
+                <div className="absolute inset-x-0 h-px border-t-2 border-dashed border-gray-200" />
+                <div className="relative bg-white px-6">
+                  <Scissors className="w-5 h-5 text-gray-200 animate-pulse" />
+                </div>
+                {/* Visual "cut" effect */}
+                <div className="absolute bottom-0 w-full flex justify-between px-2 gap-1 translate-y-1/2">
+                   {[...Array(12)].map((_, i) => (
+                    <div key={i} className="w-4 h-4 bg-gray-50 rounded-full shrink-0 border border-gray-100" />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="h-6 w-full mt-10" style={{ backgroundColor: '#dc2626' }} />
+            )}
           </div>
-          
-          {/* Bottom Branding Bar */}
-          <div className="h-2 w-full" style={{ backgroundColor: '#dc2626' }} />
         </motion.div>
       </div>
     </AnimatePresence>
@@ -317,3 +424,4 @@ function Badge({ children, className, style }: { children: React.ReactNode, clas
     </span>
   );
 }
+
