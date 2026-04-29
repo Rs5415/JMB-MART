@@ -1,22 +1,32 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
-import firebaseConfig from '@/firebase-applet-config.json';
+import localConfig from '@/firebase-applet-config.json';
+
+// Prioritize environment variables for Netlify/Production
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || localConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || localConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || localConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || localConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || localConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || localConfig.appId,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || localConfig.measurementId,
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || localConfig.firestoreDatabaseId
+};
 
 // Singleton-safe App initialization
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // Singleton-safe Firestore initialization with connectivity hardening
 const getSafeFirestore = () => {
+  const databaseId = firebaseConfig.firestoreDatabaseId;
   try {
-    // Attempt to initialize with specific settings for proxied/sandboxed environments
-    // We use experimentalForceLongPolling to overcome WebSocket restrictions which often cause 'code=unavailable'
     return initializeFirestore(app, {
       experimentalForceLongPolling: true,
-    }, firebaseConfig.firestoreDatabaseId);
+    }, databaseId);
   } catch (e) {
-    // If already initialized (e.g. during HMR), use the existing instance
-    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    return getFirestore(app, databaseId);
   }
 };
 
