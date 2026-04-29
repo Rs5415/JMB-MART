@@ -79,12 +79,12 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             const style = window.getComputedStyle(el);
             
             // Fix text colors
-            if (el.style.color.includes('oklch') || style.color.includes('oklch')) {
+            if (el.style.color.includes('okl') || style.color.includes('okl')) {
               el.style.color = '#111827'; 
             }
             
             // Fix background colors
-            if (el.style.backgroundColor.includes('oklch') || style.backgroundColor.includes('oklch')) {
+            if (el.style.backgroundColor.includes('okl') || style.backgroundColor.includes('okl')) {
               if (el.className.includes('bg-red-600')) el.style.backgroundColor = '#dc2626';
               else if (el.className.includes('bg-gray-50')) el.style.backgroundColor = '#f9fafb';
               else if (el.className.includes('bg-white')) el.style.backgroundColor = '#ffffff';
@@ -92,7 +92,7 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             }
 
             // Fix border colors
-            if (el.style.borderColor.includes('oklch') || style.borderColor.includes('oklch')) {
+            if (el.style.borderColor.includes('okl') || style.borderColor.includes('okl')) {
               el.style.borderColor = '#e5e7eb';
             }
           }
