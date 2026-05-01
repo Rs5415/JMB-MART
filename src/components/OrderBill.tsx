@@ -1,9 +1,10 @@
 import { IndianRupee, Printer, X, Download, Loader2, Scissors, Calendar, Hash, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
+import { BrandLogo } from "@/src/components/BrandLogo";
 
 interface OrderBillProps {
   order: any;
@@ -15,8 +16,16 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
   const billRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [billFormat, setBillFormat] = useState<'a4' | 'receipt'>('a4');
+  const [isPaid, setIsPaid] = useState(false);
 
-  if (!isOpen) return null;
+  // Sync isPaid state whenever order changes or modal opens
+  useEffect(() => {
+    if (order) {
+      setIsPaid(order.paymentStatus === 'paid');
+    }
+  }, [order?.id, isOpen]);
+
+  if (!isOpen || !order) return null;
 
   const handlePrint = () => {
     if (!billRef.current) return;
@@ -29,18 +38,45 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
       printWindow.document.write(`
         <html>
           <head>
-            <title>JMB Mart - Bill #${order.id?.slice(-8).toUpperCase()}</title>
+            <title>JMB Mart - Sales Invoice #${order.id?.slice(-8).toUpperCase()}</title>
             <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
             <style>
               @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
               body { 
                 font-family: 'Inter', sans-serif; 
                 background: white;
+                margin: 0;
+                padding: 0;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
               .mono { font-family: 'JetBrains Mono', monospace; }
-              .print-container { padding: 40px; max-width: 800px; margin: 0 auto; }
+              @media print {
+                @page { 
+                  margin: 0; 
+                  size: ${billFormat === 'receipt' ? '80mm auto' : 'A4 portrait'};
+                }
+                body { margin: 0; padding: 0; }
+                .print-container { 
+                  padding: ${billFormat === 'receipt' ? '0' : '20px'}; 
+                  max-width: ${billFormat === 'receipt' ? '100%' : '800px'};
+                  margin: 0 auto;
+                }
+                /* Thermal printer optimizations */
+                ${billFormat === 'receipt' ? `
+                  .p-10 { padding: 12px !important; }
+                  .mb-12 { margin-bottom: 20px !important; }
+                  .text-2xl { font-size: 18px !important; line-height: 1.2 !important; }
+                  .text-lg { font-size: 14px !important; }
+                  .text-sm { font-size: 11px !important; }
+                  .text-xs { font-size: 9px !important; }
+                  .rounded-[2.5rem] { border-radius: 0 !important; }
+                  .shadow-2xl { box-shadow: none !important; }
+                  .bg-gray-900 { background: white !important; color: black !important; border: 1px solid #000 !important; }
+                  .text-white { color: black !important; }
+                  .text-white\/40 { color: #666 !important; }
+                ` : ''}
+              }
             </style>
           </head>
           <body>
@@ -52,7 +88,7 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
                 setTimeout(() => {
                   window.print();
                   window.close();
-                }, 500);
+                }, 700);
               };
             </script>
           </body>
@@ -78,22 +114,40 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             // Force basic styles to avoid oklch errors in html2canvas/jsPDF
             const style = window.getComputedStyle(el);
             
+            // Helper to clean oklab/oklch from any computed style string
+            const hasOkl = (val: string) => val.includes('oklch') || val.includes('oklab') || val.includes('okl');
+
             // Fix text colors
-            if (el.style.color.includes('okl') || style.color.includes('okl')) {
+            if (hasOkl(el.style.color) || hasOkl(style.color)) {
               el.style.color = '#111827'; 
             }
             
             // Fix background colors
-            if (el.style.backgroundColor.includes('okl') || style.backgroundColor.includes('okl')) {
+            if (hasOkl(el.style.backgroundColor) || hasOkl(style.backgroundColor)) {
               if (el.className.includes('bg-red-600')) el.style.backgroundColor = '#dc2626';
+              else if (el.className.includes('bg-green-600')) el.style.backgroundColor = '#16a34a';
               else if (el.className.includes('bg-gray-50')) el.style.backgroundColor = '#f9fafb';
               else if (el.className.includes('bg-white')) el.style.backgroundColor = '#ffffff';
+              else if (el.className.includes('bg-gray-900')) el.style.backgroundColor = '#111827';
               else el.style.backgroundColor = 'transparent';
             }
 
             // Fix border colors
-            if (el.style.borderColor.includes('okl') || style.borderColor.includes('okl')) {
+            if (hasOkl(el.style.borderColor) || hasOkl(style.borderColor)) {
               el.style.borderColor = '#e5e7eb';
+            }
+
+            // Fix Box Shadows - these often cause the oklab parsing error
+            if (hasOkl(el.style.boxShadow) || hasOkl(style.boxShadow)) {
+              el.style.boxShadow = 'none';
+            }
+
+            // Fix Fill/Stroke for SVGs
+            if (el instanceof SVGElement || el.tagName === 'svg' || el.tagName === 'path') {
+              const fill = style.getPropertyValue('fill');
+              const stroke = style.getPropertyValue('stroke');
+              if (hasOkl(fill)) el.setAttribute('fill', 'currentColor');
+              if (hasOkl(stroke)) el.setAttribute('stroke', 'currentColor');
             }
           }
         }
@@ -150,70 +204,24 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
           className={`bg-white w-full ${billFormat === 'a4' ? 'max-w-2xl' : 'max-w-[340px]'} rounded-[2.5rem] shadow-[-20px_20px_60px_-15px_rgba(0,0,0,0.3)] relative overflow-hidden print:shadow-none print:rounded-none print:m-0 transition-all duration-700 ease-in-out border border-white/20`}
         >
-          {/* Header Controls (Always Visible) */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/80 backdrop-blur-xl border-b border-gray-100 p-6 z-20 print:hidden">
-            {/* Format Selection */}
-            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200/50">
-              <button 
-                onClick={() => setBillFormat('a4')}
-                className={`text-[10px] font-black uppercase px-4 py-2 rounded-lg transition-all ${billFormat === 'a4' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                A4 Invoice
-              </button>
-              <button 
-                onClick={() => setBillFormat('receipt')}
-                className={`text-[10px] font-black uppercase px-4 py-2 rounded-lg transition-all ${billFormat === 'receipt' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                Bill Size
-              </button>
-            </div>
-            
-            {/* Action Buttons */}
+          {/* Header (Simplified) */}
+          <div className="flex items-center justify-between bg-white border-b border-gray-100 px-6 py-4 z-20 print:hidden sticky top-0 backdrop-blur-md bg-white/90">
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={saveToDrive}
-                disabled={isGenerating}
-                className="rounded-xl bg-white hover:bg-gray-50 h-10 px-4 border-gray-200 gap-2 font-bold text-xs"
-              >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-4 h-4" alt="Drive" />
-                <span className="hidden xs:inline">Save to Drive</span>
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleDownloadPDF}
-                disabled={isGenerating}
-                className="rounded-xl bg-white hover:bg-gray-50 h-10 px-4 border-gray-200 gap-2 font-bold text-xs text-gray-700"
-              >
-                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span className="hidden xs:inline">PDF</span>
-              </Button>
-
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handlePrint}
-                className="rounded-xl bg-white hover:bg-gray-50 h-10 px-4 border-gray-200 gap-2 font-bold text-xs text-gray-700"
-              >
-                <Printer className="w-4 h-4" />
-                <span className="hidden xs:inline">Print</span>
-              </Button>
-
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={onClose}
-                className="rounded-full hover:bg-red-50 h-10 w-10 text-gray-400 hover:text-red-500 ml-2"
-              >
-                <X className="w-5 h-5" />
-              </Button>
+              <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
+              <h2 className="text-xs font-black uppercase tracking-widest text-gray-900">Invoice Preview</h2>
             </div>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={onClose}
+              className="rounded-full hover:bg-red-50 h-8 w-8 text-gray-400 hover:text-red-500"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
 
-          <div ref={billRef} className="bg-white" style={{ backgroundColor: '#ffffff' }}>
+          <div className="overflow-y-auto max-h-[70vh] scroll-smooth">
+            <div ref={billRef} className="bg-white" style={{ backgroundColor: '#ffffff' }}>
             {/* PERFORATED TOP (Receipt Style) */}
             {billFormat === 'receipt' && (
               <div className="h-6 w-full flex justify-between px-2 overflow-hidden gap-1 mt-4">
@@ -226,17 +234,29 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             <div className={`p-10 ${billFormat === 'receipt' ? 'pt-2' : 'pt-20'} transition-all duration-700`}>
               {/* BRANDING HEADER */}
               <div className="flex flex-col items-center mb-12 text-center">
-                <div 
-                  className="flex items-center justify-center w-16 h-16 rounded-[1.5rem] rotate-6 mb-6 shadow-2xl shadow-red-100 border-4 border-white"
-                  style={{ backgroundColor: '#dc2626' }}
-                >
-                  <span className="font-black text-2xl text-white -rotate-6">JM</span>
+                <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-red-100 mb-6 relative overflow-hidden border-2 border-red-50">
+                  <div className="relative flex flex-col items-center justify-center">
+                    <BrandLogo className="w-16 h-16 mb-4" />
+                    <div className="flex flex-col items-center">
+                      <div className="bg-red-600 text-white font-black text-2xl px-3 py-1.5 rounded-xl mb-1 shadow-md w-fit leading-none">JMB</div>
+                      <div className="text-red-600 font-black text-lg tracking-tighter leading-none mb-1">MART</div>
+                      <p className="text-[8px] font-black tracking-[0.3em] text-red-600/60 uppercase">Jai Maa Bhavani</p>
+                    </div>
+                  </div>
                 </div>
-                <h1 className="text-2xl font-black tracking-tighter text-gray-900 mb-1 uppercase">JMB Mart</h1>
                 <div className="flex items-center gap-2 px-3 py-1 bg-red-50 rounded-full">
                   <span className="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-red-600">Official Invoice</span>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-red-600">Tax Sales Invoice</span>
                 </div>
+              </div>
+
+              {/* PAID/UNPAID STAMP (Overlays Content) */}
+              <div className="absolute top-40 right-10 pointer-events-none z-10 opacity-20 rotate-[-25deg]">
+                {isPaid ? (
+                  <div className="border-8 border-green-600 text-green-600 px-8 py-4 rounded-3xl text-6xl font-black uppercase tracking-tighter shadow-2xl">PAID</div>
+                ) : (
+                  <div className="border-8 border-red-600 text-red-600 px-8 py-4 rounded-3xl text-6xl font-black uppercase tracking-tighter shadow-2xl uppercase">UNPAID</div>
+                )}
               </div>
 
               {/* META INFO GRID */}
@@ -266,10 +286,10 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
                 </div>
                 <div className="bg-white p-5 space-y-1">
                   <div className="flex items-center gap-1.5 text-gray-400 mb-1">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                    <span className={`w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-green-500' : 'bg-red-500'}`} />
                     <span className="text-[9px] font-black uppercase tracking-widest">Payment Status</span>
                   </div>
-                  <p className="text-sm font-bold text-green-600">UNPAID</p>
+                  <p className={`text-sm font-bold ${isPaid ? 'text-green-600' : 'text-red-900'}`}>{isPaid ? 'PAID' : 'PENDING'}</p>
                 </div>
               </div>
 
@@ -407,6 +427,77 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             ) : (
               <div className="h-6 w-full mt-10" style={{ backgroundColor: '#dc2626' }} />
             )}
+          </div>
+          </div>
+
+          {/* Bottom Footer Controls (Always Visible) */}
+          <div className="bg-gray-900 border-t border-white/10 p-6 z-20 print:hidden">
+            <div className="flex flex-col gap-6">
+              {/* Top Row: Format & Status Toggle */}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                  <button 
+                    onClick={() => setBillFormat('a4')}
+                    className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all ${billFormat === 'a4' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    A4 Paper
+                  </button>
+                  <button 
+                    onClick={() => setBillFormat('receipt')}
+                    className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all ${billFormat === 'receipt' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    POS/Bill
+                  </button>
+                </div>
+
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                  <button 
+                    onClick={() => setIsPaid(true)}
+                    className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all ${isPaid ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    Paid
+                  </button>
+                  <button 
+                    onClick={() => setIsPaid(false)}
+                    className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all ${!isPaid ? 'bg-red-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    Unpaid
+                  </button>
+                </div>
+              </div>
+
+              {/* Bottom Row: Actions */}
+              <div className="grid grid-cols-3 gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={saveToDrive}
+                  disabled={isGenerating}
+                  className="rounded-xl bg-white/5 border-white/10 hover:bg-white/10 h-12 gap-2 font-black text-[10px] text-white uppercase tracking-widest"
+                >
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-3.5 h-3.5" alt="Drive" />
+                  <span className="hidden xs:inline">Drive</span>
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  onClick={handleDownloadPDF}
+                  disabled={isGenerating}
+                  className="rounded-xl bg-white/5 border-white/10 hover:bg-white/10 h-12 gap-2 font-black text-[10px] text-white uppercase tracking-widest"
+                >
+                  {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  <span className="hidden xs:inline">PDF</span>
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  onClick={handlePrint}
+                  className="rounded-xl bg-red-600 border-red-600 hover:bg-red-700 h-12 gap-2 font-black text-[10px] text-white uppercase tracking-widest shadow-xl shadow-red-900/20"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Print</span>
+                </Button>
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>
