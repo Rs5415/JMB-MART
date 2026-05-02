@@ -33,7 +33,7 @@ export function UserOrders() {
         );
 
         const unsubscribeOrders = onSnapshot(q, (snapshot) => {
-          const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const ordersData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
           setOrders(ordersData);
           setIsLoading(false);
         }, (error) => {

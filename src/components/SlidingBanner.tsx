@@ -36,7 +36,7 @@ export function SlidingBanner({ onAction }: { onAction: (query: string) => void 
   useEffect(() => {
     const q = query(collection(db, "banners"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const dynamicBanners = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const dynamicBanners = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       if (dynamicBanners.length > 0) {
         setBanners(dynamicBanners);
       } else {

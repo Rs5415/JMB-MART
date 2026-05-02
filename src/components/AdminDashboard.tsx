@@ -60,13 +60,13 @@ export function AdminDashboard() {
     const deliveryQuery = query(collection(db, "users"), where("role", "==", "delivery"));
 
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setOrders(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     }, (error) => {
       console.error("Orders snapshot error:", error);
     });
 
     const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setProducts(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       setIsLoading(false);
     }, (error) => {
       console.error("Products snapshot error:", error);
@@ -74,22 +74,22 @@ export function AdminDashboard() {
     });
 
     const unsubscribeUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       setUsersCount(snapshot.size);
     }, (error) => {
       console.error("Users snapshot error:", error);
     });
 
     const unsubscribeDelivery = onSnapshot(deliveryQuery, (snapshot) => {
-      setDeliveryPartners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setDeliveryPartners(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     });
 
     const unsubscribeCategories = onSnapshot(query(collection(db, "categories"), orderBy("name", "asc")), (snapshot) => {
-      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setCategories(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     });
 
     const unsubscribeBanners = onSnapshot(query(collection(db, "banners"), orderBy("createdAt", "desc")), (snapshot) => {
-      setBanners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setBanners(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     });
 
     return () => {
@@ -113,9 +113,10 @@ export function AdminDashboard() {
 
       initialProducts.forEach(p => {
         if (!existingNames.has(p.name)) {
+          const { id, ...dataToSync } = p;
           const newDocRef = doc(collection(db, "products"));
           batch.set(newDocRef, {
-            ...p,
+            ...dataToSync,
             status: 'available',
             createdAt: serverTimestamp()
           });

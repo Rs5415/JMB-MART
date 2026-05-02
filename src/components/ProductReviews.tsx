@@ -38,7 +38,7 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review)));
+      setReviews(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Review)));
       setIsLoading(false);
     }, (err) => {
       console.error("Reviews listener error:", err);

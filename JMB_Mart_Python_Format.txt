@@ -1,0 +1,301 @@
+\"\"\"
+# ==============================================================================
+# JMB MART - FULL SYSTEM LOGIC (PYTHON / FASTAPI VERSION)
+# ==============================================================================
+# This file contains the complete backend logic for JMB Mart.
+# Designed for: FastAPI + Firebase Admin SDK
+# Author: JMB Mart Digital Team
+# Admin: archanasharma993151@gmail.com
+# ==============================================================================
+\"\"\"
+
+import os
+import random
+import uuid
+from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, Depends, Header, status
+from pydantic import BaseModel, Field
+import firebase_admin
+from firebase_admin import credentials, firestore, auth
+
+# --- INITIALIZATION ---
+# Pre-requisite: Service Account Key from Firebase Console
+if not firebase_admin._apps:
+    cred = credentials.Certificate(\"serviceAccountKey.json\")
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+app = FastAPI(title=\"JMB Mart Enterprise API\")
+
+# --- MASTER CONFIGURATION ---
+ADMIN_EMAIL = \"archanasharma993151@gmail.com\"
+
+# --- DATA MODELS (Pydantic) ---
+
+class Product(BaseModel):
+    id: Optional[str] = None
+    name: str
+    price: float
+    mrp: Optional[float] = None
+    category: str
+    image: str
+    description: str
+    status: str = \"available\"  # available, out_of_stock, unavailable
+    createdAt: datetime = Field(default_factory=datetime.now)
+
+class OrderItem(BaseModel):
+    productId: str
+    name: str
+    price: float
+    quantity: int
+
+class Address(BaseModel):
+    name: str
+    phone: str
+    houseNumber: str
+    area: str
+    pincode: str
+    landmark: Optional[str] = None
+
+class Order(BaseModel):
+    id: Optional[str] = None
+    userId: str
+    items: List[OrderItem]
+    total: float
+    subtotal: float
+    deliveryFee: float = 20.0
+    address: Address
+    status: str = \"pending\"  # pending, assigned, out_for_delivery, delivered, cancelled
+    paymentStatus: str = \"unpaid\"  # paid, unpaid
+    paymentMethod: str = \"COD\"
+    deliveryPersonId: Optional[str] = None
+    otp: Optional[str] = None
+    createdAt: datetime = Field(default_factory=datetime.now)
+
+class User(BaseModel):
+    uid: str
+    email: str
+    role: str = \"customer\"  # customer, admin, delivery
+    isBlocked: bool = False
+    name: Optional[str] = None
+    phone: Optional[str] = None
+
+class Banner(BaseModel):
+    id: Optional[str] = None
+    title: str
+    subtitle: str
+    highlight: str
+    description: str
+    image: str
+    searchQuery: str
+    color: str = \"bg-red-600\"
+    createdAt: datetime = Field(default_factory=datetime.now)
+
+# --- SECURITY & AUTH MIDDLEWARE ---
+
+async def get_current_user(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail=\"Auth token required\")
+    try:
+        # Verify Firebase Token
+        token = authorization.replace(\"Bearer \", \"\")
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f\"Invalid token: {str(e)}\")
+
+async def admin_only(user=Depends(get_current_user)):
+    user_doc = db.collection(\"users\").document(user['uid']).get()
+    if not user_doc.exists:
+        # Check if they are the hardcoded super-admin
+        if user.get(\"email\") == ADMIN_EMAIL:
+            return user
+        raise HTTPException(status_code=403, detail=\"User record not found\")
+    
+    data = user_doc.to_dict()
+    if data.get(\"email\") == ADMIN_EMAIL or data.get(\"role\") == \"admin\":
+        return user
+    raise HTTPException(status_code=403, detail=\"Admin access required\")
+
+# --- ADMIN SECTION (DASHBOARD LOGIC) ---
+
+@app.get(\"/api/admin/stats\", response_model=Dict[str, Any])
+async def get_admin_dashboard_stats(_=Depends(admin_only)):
+    \"\"\"Calculates all metrics for the Admin Dashboard Home\"\"\"
+    orders = db.collection(\"orders\").stream()
+    users = db.collection(\"users\").stream()
+    
+    order_list = [o.to_dict() for o in orders]
+    user_list = [u.to_dict() for u in users]
+    
+    revenue = sum(o.get(\"total\", 0) for o in order_list if o.get(\"status\") == \"delivered\")
+    pending = len([o for o in order_list if o.get(\"status\") == \"pending\"])
+    delivered = len([o for o in order_list if o.get(\"status\") == \"delivered\"])
+    
+    return {
+        \"total_orders\": len(order_list),
+        \"revenue\": revenue,
+        \"pending_orders\": pending,
+        \"delivered_orders\": delivered,
+        \"total_users\": len(user_list),
+        \"success_rate\": (delivered / len(order_list) * 100) if order_list else 0
+    }
+
+@app.get(\"/api/admin/analytics/sales\")
+async def get_sales_analytics(_=Depends(admin_only)):
+    \"\"\"Generates data for the 7-day sales line chart\"\"\"
+    now = datetime.now()
+    sales_data = []
+    
+    for i in range(6, -1, -1):
+        day = now - timedelta(days=i)
+        start_of_day = datetime(day.year, day.month, day.day)
+        end_of_day = start_of_day + timedelta(days=1)
+        
+        daily_orders = db.collection(\"orders\") \\
+            .where(\"status\", \"==\", \"delivered\") \\
+            .where(\"createdAt\", \">=\", start_of_day) \\
+            .where(\"createdAt\", \"<\", end_of_day) \\
+            .stream()
+            
+        total = sum(o.to_dict().get(\"total\", 0) for o in daily_orders)
+        sales_data.append({
+            \"name\": day.strftime(\"%d/%m\"),
+            \"total\": total
+        })
+    return sales_data
+
+# --- PRODUCT & INVENTORY MANAGEMENT ---
+
+@app.post(\"/api/admin/products\")
+async def create_product(product: Product, _=Depends(admin_only)):
+    doc_ref = db.collection(\"products\").document()
+    product_data = product.dict(exclude={\"id\"})
+    product_data[\"createdAt\"] = firestore.SERVER_TIMESTAMP
+    doc_ref.set(product_data)
+    return {\"id\": doc_ref.id, \"status\": \"Product Success\"}
+
+@app.patch(\"/api/admin/products/{pid}/status\")
+async def update_product_status(pid: str, status: str, _=Depends(admin_only)):
+    db.collection(\"products\").document(pid).update({\"status\": status})
+    return {\"message\": f\"Product {pid} marked as {status}\"}
+
+# --- USER MANAGEMENT ---
+
+@app.get(\"/api/admin/users\")
+async def list_all_users(_=Depends(admin_only)):
+    users = db.collection(\"users\").stream()
+    return [{**u.to_dict(), \"id\": u.id} for u in users]
+
+@app.patch(\"/api/admin/users/{uid}/block\")
+async def toggle_user_block(uid: str, is_blocked: bool, _=Depends(admin_only)):
+    db.collection(\"users\").document(uid).update({\"isBlocked\": is_blocked})
+    return {\"status\": \"updated\"}
+
+# --- DELIVERY & ORDER LOGIC ---
+
+@app.post(\"/api/admin/orders/{oid}/assign\")
+async def assign_order(oid: str, delivery_person_id: str, _=Depends(admin_only)):
+    otp = str(random.randint(1000, 9999))
+    db.collection(\"orders\").document(oid).update({
+        \"deliveryPersonId\": delivery_person_id,
+        \"status\": \"assigned\",
+        \"otp\": otp
+    })
+    return {\"message\": \"Partner Assigned\", \"otp\": otp}
+
+@app.get(\"/api/delivery/my-orders\")
+async def get_delivery_orders(user=Depends(get_current_user)):
+    orders = db.collection(\"orders\") \\
+        .where(\"deliveryPersonId\", \"==\", user['uid']) \\
+        .where(\"status\", \"in\", [\"assigned\", \"out_for_delivery\"]) \\
+        .stream()
+    return [{**o.to_dict(), \"id\": o.id} for o in orders]
+
+# --- BILL & INVOICE GENERATION LOGIC ---
+
+@app.get(\"/api/orders/{oid}/invoice\")
+async def generate_invoice_data(oid: str, user=Depends(get_current_user)):
+    order_doc = db.collection(\"orders\").document(oid).get()
+    if not order_doc.exists:
+        raise HTTPException(status_code=404, detail=\"Order not found\")
+    
+    order = order_doc.to_dict()
+    
+    # Simple HTML Bill Layout (Logic representation)
+    invoice_html = f\"\"\"
+    <div style=\"font-family: sans-serif; padding: 40px; border: 1px solid #eee;\">
+        <div style=\"text-align: center; margin-bottom: 30px;\">
+            <h1 style=\"color: #dc2626; margin: 0;\">JMB MART</h1>
+            <p style=\"font-size: 10px; letter-spacing: 2px; color: #666;\">JAI MAA BHAVANI</p>
+            <p style=\"font-weight: bold; border: 1px solid #dc2626; display: inline-block; padding: 4px 12px; border-radius: 20px; color: #dc2626;\">TAX INVOICE</p>
+        </div>
+        
+        <table style=\"width: 100%; margin-bottom: 20px;\">
+            <tr>
+                <td><strong>Order ID:</strong> {oid[:8].upper()}</td>
+                <td style=\"text-align: right;\"><strong>Date:</strong> {order['createdAt'].strftime('%d %b %Y')}</td>
+            </tr>
+        </table>
+        
+        <div style=\"background: #f9fafb; padding: 15px; border-radius: 10px; margin-bottom: 20px;\">
+            <p style=\"margin: 0; font-size: 12px; color: #666;\">DELIVERY ADDRESS</p>
+            <p style=\"margin: 5px 0; font-weight: bold;\">{order['address']['name']}</p>
+            <p style=\"margin: 0; font-size: 13px;\">{order['address']['houseNumber']}, Pin: {order['address']['pincode']}</p>
+        </div>
+        
+        <table style=\"width: 100%; border-collapse: collapse;\">
+            <tr style=\"border-bottom: 2px solid #eee; text-align: left; font-size: 12px; color: #666;\">
+                <th style=\"padding: 10px 0;\">ITEM</th>
+                <th style=\"text-align: center;\">QTY</th>
+                <th style=\"text-align: right;\">PRICE</th>
+            </tr>
+            {''.join([f\"<tr style='border-bottom: 1px solid #f3f4f6;'><td style='padding: 10px 0;'>{item['name']}</td><td style='text-align: center;'>{item['quantity']}</td><td style='text-align: right;'>₹{item['price']}</td></tr>\" for item in order['items']])}
+        </table>
+        
+        <div style=\"margin-top: 20px; text-align: right; background: #111; color: #fff; padding: 20px; border-radius: 10px;\">
+            <p style=\"margin: 0; font-size: 12px; color: #888;\">TOTAL AMOUNT DUE</p>
+            <h2 style=\"margin: 5px 0; color: #ef4444; font-size: 30px;\">₹{order['total']}</h2>
+        </div>
+        
+        <div style=\"text-align: center; margin-top: 40px;\">
+            <p style=\"font-size: 11px; color: #999;\">This is a digital invoice generated by JMB Mart System</p>
+            <p style=\"font-style: italic; font-weight: bold; color: #dc2626\">Thank you for shopping with us!</p>
+        </div>
+    </div>
+    \"\"\"
+    return {\"html\": invoice_html, \"order\": order}
+
+# --- BANNER & MARKETING ---
+
+@app.post(\"/api/admin/banners\")
+async def add_banner(banner: Banner, _=Depends(admin_only)):
+    doc_ref = db.collection(\"banners\").document()
+    db.collection(\"banners\").document(doc_ref.id).set(banner.dict(exclude={\"id\"}))
+    return {\"id\": doc_ref.id}
+
+# --- CUSTOMER FRONT-FACING API ---
+
+@app.get(\"/api/products\")
+async def get_all_products(category: Optional[str] = None):
+    query = db.collection(\"products\").where(\"status\", \"==\", \"available\")
+    if category:
+        query = query.where(\"category\", \"==\", category)
+    docs = query.stream()
+    return [{**doc.to_dict(), \"id\": doc.id} for doc in docs]
+
+@app.post(\"/api/orders\")
+async def place_order(order: Order, user=Depends(get_current_user)):
+    order_data = order.dict(exclude={\"id\"})
+    order_data[\"userId\"] = user['uid']
+    order_data[\"createdAt\"] = firestore.SERVER_TIMESTAMP
+    doc_ref = db.collection(\"orders\").document()
+    doc_ref.set(order_data)
+    return {\"orderId\": doc_ref.id}
+
+# --- ENTRY POINT ---
+if __name__ == \"__main__\":
+    import uvicorn
+    # Start the server on port 8000
+    uvicorn.run(app, host=\"0.0.0.0\", port=8000)

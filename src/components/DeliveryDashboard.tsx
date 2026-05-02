@@ -40,7 +40,7 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
     );
 
     const unsubscribe = onSnapshot(ordersQuery, (snapshot) => {
-      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setOrders(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       setIsLoading(false);
     }, (error) => {
       console.error("Delivery orders snapshot error:", error);

@@ -72,8 +72,8 @@ export default function App() {
     const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
     const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
       const fetchedProducts = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        id: doc.id
       })) as Product[];
       
       if (fetchedProducts.length > 0) {
