@@ -5,17 +5,26 @@ import { collection, query, where, onSnapshot, updateDoc, doc, getDoc } from "fi
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Package, XCircle, Clock, CheckCircle2, Loader2, ShoppingBag, Phone, Navigation, KeyRound, ReceiptText } from "lucide-react";
+import { Package, XCircle, Clock, CheckCircle2, Loader2, ShoppingBag, Phone, Navigation, KeyRound, ReceiptText, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { OrderBill } from "@/src/components/OrderBill";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ProductReviews } from "./ProductReviews";
 
 export function UserOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrderForBill, setSelectedOrderForBill] = useState<any | null>(null);
+  const [selectedProductForReview, setSelectedProductForReview] = useState<any | null>(null);
 
   const [deliveryLocations, setDeliveryLocations] = useState<{[key: string]: any}>({});
+
+  const recentDeliveredItems = orders
+    .filter(o => o.status === 'delivered')
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .flatMap(o => o.items || [])
+    .slice(0, 10);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -76,7 +85,11 @@ export function UserOrders() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [orders]);
 
+  const [isCancelledLoading, setIsCancelledLoading] = useState<string | null>(null);
+
   const handleCancelOrder = async (orderId: string) => {
+    if (!window.confirm("Are you sure you want to cancel this order?")) return;
+    setIsCancelledLoading(orderId);
     try {
       await updateDoc(doc(db, "orders", orderId), {
         status: 'cancelled'
@@ -84,6 +97,9 @@ export function UserOrders() {
       console.log("Order cancelled successfully.");
     } catch (error) {
       console.error("Error cancelling order:", error);
+      alert("Failed to cancel order. Please contact support.");
+    } finally {
+      setIsCancelledLoading(null);
     }
   };
 
@@ -112,6 +128,43 @@ export function UserOrders() {
           )}
         </div>
       </div>
+
+      {recentDeliveredItems.length > 0 && (
+        <div className="mb-8 overflow-hidden bg-white rounded-3xl border border-red-50 p-4 md:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Rate Recent Purchases</h2>
+              <p className="text-[10px] font-bold text-gray-400 mt-0.5">Tell others what you think about your items</p>
+            </div>
+            <div className="w-8 h-8 bg-red-50 rounded-xl flex items-center justify-center">
+              <Star className="w-4 h-4 text-red-600 fill-red-600" />
+            </div>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+            {recentDeliveredItems.map((item, i) => (
+              <button
+                key={`${item.id}-${i}`}
+                onClick={() => setSelectedProductForReview({ id: item.id, name: item.name })}
+                className="flex flex-col items-center gap-2 min-w-[100px] group"
+              >
+                <div className="w-16 h-16 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-center p-2 group-hover:bg-red-50 group-hover:border-red-100 transition-all shadow-sm group-hover:shadow-md">
+                   {item.image ? (
+                     <img src={item.image} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                   ) : (
+                     <ShoppingBag className="w-6 h-6 text-gray-300" />
+                   )}
+                </div>
+                <span className="text-[10px] font-black text-gray-900 truncate w-full text-center px-1 uppercase tracking-tight">
+                  {item.name}
+                </span>
+                <div className="flex gap-0.5">
+                  {[1,2,3,4,5].map(s => <Star key={s} className="w-2 h-2 text-yellow-400 fill-yellow-400 opacity-60" />)}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       <ScrollArea className="h-[75vh] pr-4 -mr-4">
         <div className="space-y-4 md:space-y-6">
@@ -124,7 +177,7 @@ export function UserOrders() {
                       <ShoppingBag className="w-4 h-4 md:w-5 md:h-5 text-gray-400" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-black text-gray-900 tracking-tight text-sm md:text-base truncate">Order #{order.id.slice(-5)}</p>
+                      <p className="font-black text-gray-900 tracking-tight text-sm md:text-base truncate">Order #{order.orderNumber || order.id.slice(-5)}</p>
                       <p className="text-[8px] md:text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate">
                         {order.createdAt?.toDate().toLocaleString()}
                       </p>
@@ -134,8 +187,9 @@ export function UserOrders() {
                     order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
                     order.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
                     order.status === 'out_for_delivery' ? 'bg-purple-100 text-purple-700' :
+                    order.status === 'delivered' ? 'bg-green-100 text-green-700' :
                     order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                    'bg-red-100 text-red-700'
+                    'bg-gray-100 text-gray-700'
                   }`}>
                     {order.status.replace(/_/g, ' ')}
                   </Badge>
@@ -205,7 +259,9 @@ export function UserOrders() {
                         size="sm" 
                         className="text-red-500 hover:text-red-600 hover:bg-red-50 font-black rounded-lg md:rounded-xl px-2 md:px-4 h-8 md:h-10 text-[10px] md:text-sm"
                         onClick={() => handleCancelOrder(order.id)}
+                        disabled={isCancelledLoading === order.id}
                       >
+                        {isCancelledLoading === order.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
                         Cancel
                       </Button>
                     )}
@@ -222,11 +278,32 @@ export function UserOrders() {
                       variant="outline" 
                       size="sm" 
                       className="border-red-100 text-red-600 hover:bg-red-50 font-black rounded-lg md:rounded-xl px-2 md:px-4 h-8 md:h-10 text-[10px] md:text-sm"
+                      onClick={() => window.open(`https://wa.me/917004455667?text=Hi, I need help with my order #${order.orderNumber || order.id.slice(-5)}`, '_blank')}
                     >
                       Help
                     </Button>
                   </div>
                 </div>
+                
+                {order.status === 'delivered' && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Rate Products</p>
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                      {order.items?.map((item: any) => (
+                        <Button
+                          key={item.id}
+                          variant="ghost"
+                          size="sm"
+                          className="flex flex-col items-center gap-1 h-auto py-2 px-3 bg-gray-50 hover:bg-red-50 text-gray-600 hover:text-red-600 rounded-xl"
+                          onClick={() => setSelectedProductForReview({ id: item.id, name: item.name })}
+                        >
+                          <Star className="w-4 h-4" />
+                          <span className="text-[8px] font-black uppercase tracking-tight max-w-[60px] truncate">{item.name}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -253,6 +330,23 @@ export function UserOrders() {
         isOpen={!!selectedOrderForBill} 
         onClose={() => setSelectedOrderForBill(null)} 
       />
+
+      <Sheet open={!!selectedProductForReview} onOpenChange={(open) => !open && setSelectedProductForReview(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl border-none">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2 text-red-700">
+              <Star className="w-5 h-5 fill-red-700" />
+              Product Review
+            </SheetTitle>
+          </SheetHeader>
+          {selectedProductForReview && (
+            <ProductReviews 
+              productId={selectedProductForReview.id} 
+              productName={selectedProductForReview.name} 
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Search, Mic, ShoppingCart, MapPin, User, ShieldCheck, Navigation, Loader2 } from "lucide-react";
+import { Search, Mic, ShoppingCart, MapPin, User, ShieldCheck, Navigation, Loader2, Heart } from "lucide-react";
 import { BrandLogo } from "@/src/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,15 +14,22 @@ interface NavbarProps {
   userRole?: string | null;
   userProfile?: any;
   currentPage?: string;
+  wishlistCount?: number;
+  onOpenWishlist?: () => void;
 }
 
-export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, userRole, userProfile, currentPage }: NavbarProps) {
+export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, userRole, userProfile, currentPage, wishlistCount = 0, onOpenWishlist }: NavbarProps) {
   const [isListening, setIsListening] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const isAdminView = userRole === 'admin' && currentPage === 'admin';
   const isDeliveryView = userRole === 'delivery' && currentPage === 'delivery';
   const isSpecialView = isAdminView || isDeliveryView;
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSearch(searchQuery);
+  };
 
   const startVoiceSearch = () => {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -95,7 +102,7 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
             
           {/* Search Bar - Desktop */}
           {!isSpecialView && (
-            <div className="hidden md:flex relative flex-1 max-w-xl">
+            <form onSubmit={handleSearchSubmit} className="hidden md:flex relative flex-1 max-w-xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder={isListening ? "Listening... (Bolye...)" : "Search for groceries, snacks and more..."}
@@ -111,11 +118,12 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
                 variant="ghost"
                 className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-full w-10 h-10 ${isListening ? 'text-red-500 bg-red-50 animate-pulse' : 'text-red-600 hover:bg-red-50'}`}
                 onClick={startVoiceSearch}
+                type="button"
                 title="Voice Search"
               >
                 <Mic className={isListening ? "w-6 h-6" : "w-5 h-5"} />
               </Button>
-            </div>
+            </form>
           )}
 
           {/* Actions */}
@@ -131,6 +139,19 @@ export function Navbar({ cartCount, deliveryCount = 0, onSearch, onOpenCart, use
               </Button>
             ) : (
               <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden md:flex rounded-xl relative hover:bg-red-50 hover:text-red-600"
+                  onClick={onOpenWishlist}
+                >
+                  <Heart className={`w-5 h-5 ${wishlistCount > 0 ? 'fill-red-600 text-red-600' : 'text-gray-400'}`} />
+                  {wishlistCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-black">
+                      {wishlistCount}
+                    </span>
+                  )}
+                </Button>
                 {userRole === 'admin' && (
                   <Button 
                     variant="outline" 

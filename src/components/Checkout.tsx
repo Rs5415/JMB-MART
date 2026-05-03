@@ -7,7 +7,7 @@ import { MapPin, User, Home, CheckCircle2, ArrowLeft, Loader2, Navigation, India
 import { Separator } from "@/components/ui/separator";
 import { motion } from "motion/react";
 import { db } from "@/src/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
 
 interface CheckoutProps {
   total: number;
@@ -84,6 +84,17 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
 
     setIsSubmitting(true);
     try {
+      // Get the next serial order number
+      const ordersRef = collection(db, "orders");
+      const q = query(ordersRef, orderBy("orderNumber", "desc"), limit(1));
+      const querySnapshot = await getDocs(q);
+      
+      let nextOrderNumber = 1001;
+      if (!querySnapshot.empty) {
+        const lastOrder = querySnapshot.docs[0].data();
+        nextOrderNumber = (lastOrder.orderNumber || 1000) + 1;
+      }
+
       await addDoc(collection(db, "orders"), {
         userId: user.uid,
         items: cart.map(item => ({
@@ -95,6 +106,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
         total,
         address: formData,
         status: 'pending',
+        orderNumber: nextOrderNumber,
         createdAt: serverTimestamp()
       });
       
@@ -104,7 +116,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
       }, 3000);
     } catch (error) {
       console.error("Error placing order:", error);
-      console.error("Failed to place order. Please try again.");
+      alert("Failed to place order. Please check your connection and try again.");
     } finally {
       setIsSubmitting(false);
     }

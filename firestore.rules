@@ -166,7 +166,9 @@ service cloud.firestore {
 
     match /phoneNumbers/{phoneNumber} {
       allow read: if isSignedIn() && isUnblocked();
-      allow create: if isSignedIn() && isUnblocked() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && isUnblocked() && 
+                      phoneNumber.matches("^[0-9]{10}$") &&
+                      request.resource.data.uid == request.auth.uid;
     }
   }
 }

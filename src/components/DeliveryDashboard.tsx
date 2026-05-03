@@ -225,7 +225,7 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
                             <Package className="w-6 h-6 text-gray-400" />
                           </div>
                           <div>
-                            <p className="font-black text-gray-900 tracking-tight text-lg">Order #{order.id.slice(-5)}</p>
+                            <p className="font-black text-gray-900 tracking-tight text-lg">Order #{order.orderNumber || order.id.slice(-5)}</p>
                             <Badge className={`uppercase text-[10px] font-black px-3 py-1 rounded-full mt-1 ${
                               order.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
                               'bg-orange-100 text-orange-700'
@@ -412,7 +412,7 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
                             {order.status === 'delivered' ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
                           </div>
                           <div>
-                            <p className="font-black text-gray-900">Order #{order.id.slice(-5)}</p>
+                            <p className="font-black text-gray-900">Order #{order.orderNumber || order.id.slice(-5)}</p>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">₹{order.total} • {order.address?.name}</p>
                           </div>
                         </div>

@@ -15,6 +15,7 @@ interface Review {
   userName: string;
   rating: number;
   comment: string;
+  imageUrl?: string;
   createdAt: any;
 }
 
@@ -23,10 +24,13 @@ interface ProductReviewsProps {
   productName: string;
 }
 
+import { ImageGenerator } from "./ImageGenerator";
+
 export function ProductReviews({ productId, productName }: ProductReviewsProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [newComment, setNewComment] = useState("");
   const [rating, setRating] = useState(5);
+  const [imageUrl, setImageUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -60,23 +64,32 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
         userName: auth.currentUser.displayName || auth.currentUser.email || "Anonymous",
         rating,
         comment: newComment.trim(),
+        imageUrl: imageUrl || null,
         createdAt: serverTimestamp()
       });
       setNewComment("");
       setRating(5);
+      setImageUrl("");
     } catch (error) {
       console.error("Error adding review:", error);
+      alert("Failed to submit review. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const handleDelete = async (reviewId: string) => {
     if (!window.confirm("Delete your review?")) return;
+    setDeletingId(reviewId);
     try {
       await deleteDoc(doc(db, "reviews", reviewId));
     } catch (error) {
       console.error("Error deleting review:", error);
+      alert("Failed to delete review.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -138,16 +151,29 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
                       {review.createdAt?.toDate().toLocaleDateString()}
                     </span>
                   </div>
+                  
+                  {review.imageUrl && (
+                    <div className="w-full aspect-video rounded-xl overflow-hidden bg-white border border-gray-100 my-2">
+                      <img 
+                        src={review.imageUrl} 
+                        alt="Review" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  )}
+                  
                   <p className="text-sm text-gray-600 font-medium leading-relaxed">{review.comment}</p>
                   
                   {auth.currentUser?.uid === review.userId && (
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 hover:text-red-600 rounded-lg hover:bg-white shadow-sm"
+                      className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 hover:text-red-600 rounded-lg hover:bg-white shadow-sm ${deletingId === review.id ? 'opacity-100' : ''}`}
                       onClick={() => handleDelete(review.id)}
+                      disabled={deletingId === review.id}
                     >
-                      <Trash2 className="w-3 h-3" />
+                      {deletingId === review.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                     </Button>
                   )}
                 </motion.div>
@@ -159,19 +185,55 @@ export function ProductReviews({ productId, productName }: ProductReviewsProps) 
 
       {auth.currentUser ? (
         <form onSubmit={handleSubmit} className="space-y-4 bg-white pt-2">
-          <div className="flex flex-col gap-2">
-            <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rate this product</Label>
-            <div className="flex gap-2 bg-gray-50 p-2 rounded-2xl w-fit border border-gray-100">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setRating(s)}
-                  className={`p-1 transition-all ${rating >= s ? 'scale-110' : 'opacity-40 grayscale'}`}
-                >
-                  <Star className={`w-5 h-5 ${rating >= s ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                </button>
-              ))}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rate this product</Label>
+              <div className="flex gap-2 bg-gray-50 p-2 rounded-2xl w-fit border border-gray-100">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setRating(s)}
+                    className={`p-1 transition-all ${rating >= s ? 'scale-110' : 'opacity-40 grayscale'}`}
+                  >
+                    <Star className={`w-5 h-5 ${rating >= s ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Add a photo (Optional)</Label>
+              <div className="flex flex-col gap-3">
+                {imageUrl && (
+                  <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm">
+                    <img src={imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <Button 
+                      type="button"
+                      variant="destructive" 
+                      size="icon" 
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full shadow-lg"
+                      onClick={() => setImageUrl("")}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <Input 
+                    placeholder="Photo URL..." 
+                    className="rounded-2xl border-gray-100 bg-gray-50/50 text-xs h-10"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                  />
+                  <div className="scale-90 origin-left">
+                    <ImageGenerator 
+                      onImageGenerated={(url) => setImageUrl(url)}
+                      promptOverride={`A photo of ${productName} high quality review`}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div className="relative">

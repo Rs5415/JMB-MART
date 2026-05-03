@@ -15,6 +15,56 @@ import { OrderBill } from "@/src/components/OrderBill";
 import { products as initialProducts } from "@/src/data/products";
 import Papa from 'papaparse';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
+import { auth } from "@/src/lib/firebase";
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  // Keep alert for user feedback if needed
+  alert(`Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -25,7 +75,14 @@ export function AdminDashboard() {
   const [usersCount, setUsersCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [newProduct, setNewProduct] = useState({
+  const [newProduct, setNewProduct] = useState<{
+    name: string;
+    price: string | number;
+    mrp: string | number | undefined;
+    category: string;
+    image: string;
+    description: string;
+  }>({
     name: '',
     price: '',
     mrp: '',
@@ -35,9 +92,13 @@ export function AdminDashboard() {
   });
   const [newCategory, setNewCategory] = useState({
     name: '',
-    icon: ''
+    icon: '',
+    image: ''
   });
   const [isAdding, setIsAdding] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryFilter, setInventoryFilter] = useState<'all' | 'available' | 'out_of_stock' | 'unavailable'>('all');
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [bulkUploadProgress, setBulkUploadProgress] = useState({ total: 0, current: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -127,12 +188,16 @@ export function AdminDashboard() {
       const existingCatsSnap = await getDocs(collection(db, "categories"));
       if (existingCatsSnap.empty) {
         const initialCategories = [
-          { name: 'Grains', icon: '🌾' },
-          { name: 'Oils', icon: '🛢️' },
-          { name: 'Soaps', icon: '🧼' },
-          { name: 'Spices', icon: '🌶️' },
-          { name: 'Dairy', icon: '🥛' },
-          { name: 'Snacks', icon: '🍪' },
+          { name: 'Fresh Vegetables', icon: '🥦' },
+          { name: 'Fresh Fruits', icon: '🍎' },
+          { name: 'Milk & Milk Products', icon: '🥛' },
+          { name: 'Chips & Namkeens', icon: '🍟' },
+          { name: 'Biscuits & Cookies', icon: '🍪' },
+          { name: 'Atta, Flours & Sooji', icon: '🌾' },
+          { name: 'Dals & Pulses', icon: '🍛' },
+          { name: 'Rice', icon: '🍚' },
+          { name: 'Personal Care', icon: '🧴' },
+          { name: 'Home Needs', icon: '🏠' },
         ];
         initialCategories.forEach(cat => {
           const newDocRef = doc(collection(db, "categories"));
@@ -160,6 +225,9 @@ export function AdminDashboard() {
   };
 
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBannerDeleteId, setConfirmBannerDeleteId] = useState<string | null>(null);
+  const [confirmCategoryDeleteId, setConfirmCategoryDeleteId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("analytics");
 
   const handleAssignDelivery = async (orderId: string, deliveryPersonId: string) => {
@@ -172,6 +240,35 @@ export function AdminDashboard() {
       });
     } catch (error) {
       console.error("Error assigning delivery:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
+    }
+  };
+
+  const handleApplyCategoryDiscount = async (categoryName: string, discountPercent: number) => {
+    if (!window.confirm(`Apply ${discountPercent}% discount to ALL available products in ${categoryName}?`)) return;
+    
+    setIsSyncing(true);
+    try {
+      const batch = writeBatch(db);
+      const categoryProducts = products.filter(p => p.category === categoryName && p.status === 'available');
+      
+      categoryProducts.forEach(p => {
+        const currentMrp = p.mrp || p.price;
+        const newPrice = Math.round(currentMrp * (1 - discountPercent / 100));
+        batch.update(doc(db, "products", p.id), {
+          price: newPrice,
+          mrp: currentMrp,
+          updatedAt: serverTimestamp()
+        });
+      });
+      
+      await batch.commit();
+      alert(`Applied ${discountPercent}% discount to ${categoryProducts.length} products!`);
+    } catch (error) {
+      console.error("Discount error:", error);
+      handleFirestoreError(error, OperationType.WRITE, `products/${categoryName}/discount`);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -180,14 +277,53 @@ export function AdminDashboard() {
       await updateDoc(doc(db, "orders", orderId), { status });
     } catch (error) {
       console.error("Error updating order:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
     }
   };
 
   const handleUpdateProductStatus = async (productId: string, status: 'available' | 'out_of_stock' | 'unavailable') => {
+    if (!productId) return;
     try {
       await updateDoc(doc(db, "products", productId), { status });
     } catch (error) {
       console.error("Error updating product status:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `products/${productId}`);
+    }
+  };
+
+  const handleEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    
+    try {
+      const { id, ...dataToUpdate } = editingProduct;
+      await updateDoc(doc(db, "products", id), {
+        ...dataToUpdate,
+        price: Number(dataToUpdate.price),
+        mrp: dataToUpdate.mrp ? Number(dataToUpdate.mrp) : null,
+        updatedAt: serverTimestamp()
+      });
+      setEditingProduct(null);
+    } catch (error) {
+      console.error("Error editing product:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `products/${editingProduct.id}`);
+    }
+  };
+
+  const handleClearAllProducts = async () => {
+    if (!window.confirm("CRITICAL: Are you sure? This will delete ALL products from your store. This cannot be undone.")) return;
+    
+    const batch = writeBatch(db);
+    products.forEach(p => {
+      batch.delete(doc(db, "products", p.id));
+    });
+    
+    try {
+      await batch.commit();
+      alert("All products cleared successfully.");
+    } catch (error) {
+      console.error("Error clearing products:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'products (bulk)');
     }
   };
 
@@ -196,17 +332,24 @@ export function AdminDashboard() {
       await updateDoc(doc(db, "users", userId), { isBlocked: !currentStatus });
     } catch (error) {
       console.error("Error toggling user block:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
     }
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!window.confirm("Are you sure you want to remove this product?")) return;
+    if (!productId) {
+      console.error("No product ID provided for deletion");
+      return;
+    }
+    // Safety check passed
     setIsDeleting(productId);
     try {
+      console.log(`Attempting to delete product: ${productId}`);
       await deleteDoc(doc(db, "products", productId));
+      console.log(`Product deleted successfully: ${productId}`);
     } catch (error) {
       console.error("Error deleting product:", error);
-      alert("Failed to delete product. Please check your permissions.");
+      handleFirestoreError(error, OperationType.DELETE, `products/${productId}`);
     } finally {
       setIsDeleting(null);
     }
@@ -214,15 +357,16 @@ export function AdminDashboard() {
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCategory.name || !newCategory.icon) return;
+    if (!newCategory.name || (!newCategory.icon && !newCategory.image)) return;
     try {
       await addDoc(collection(db, "categories"), {
         ...newCategory,
         createdAt: serverTimestamp()
       });
-      setNewCategory({ name: '', icon: '' });
+      setNewCategory({ name: '', icon: '', image: '' });
     } catch (error) {
       console.error("Error adding category:", error);
+      handleFirestoreError(error, OperationType.CREATE, "categories");
     }
   };
 
@@ -245,22 +389,31 @@ export function AdminDashboard() {
       });
     } catch (error) {
       console.error("Error adding banner:", error);
+      handleFirestoreError(error, OperationType.CREATE, "banners");
     }
   };
 
   const handleDeleteBanner = async (bannerId: string) => {
+    setIsDeleting(bannerId);
     try {
       await deleteDoc(doc(db, "banners", bannerId));
     } catch (error) {
       console.error("Error deleting banner:", error);
+      handleFirestoreError(error, OperationType.DELETE, `banners/${bannerId}`);
+    } finally {
+      setIsDeleting(null);
     }
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
+    setIsDeleting(categoryId);
     try {
       await deleteDoc(doc(db, "categories", categoryId));
     } catch (error) {
       console.error("Error deleting category:", error);
+      handleFirestoreError(error, OperationType.DELETE, `categories/${categoryId}`);
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -269,6 +422,16 @@ export function AdminDashboard() {
       await updateDoc(doc(db, "categories", categoryId), { icon: newIcon });
     } catch (error) {
       console.error("Error updating category icon:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `categories/${categoryId}`);
+    }
+  };
+
+  const handleUpdateCategoryImage = async (categoryId: string, newImage: string) => {
+    try {
+      await updateDoc(doc(db, "categories", categoryId), { image: newImage });
+    } catch (error) {
+      console.error("Error updating category image:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `categories/${categoryId}`);
     }
   };
 
@@ -289,6 +452,7 @@ export function AdminDashboard() {
       setNewProduct({ name: '', price: '', mrp: '', category: '', image: '', description: '' });
     } catch (error) {
       console.error("Error adding product:", error);
+      handleFirestoreError(error, OperationType.CREATE, "products");
     } finally {
       setIsAdding(false);
     }
@@ -444,67 +608,63 @@ export function AdminDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="bg-gray-100 p-1.5 rounded-2xl h-14 mb-8 flex w-full overflow-x-auto scrollbar-hide flex-nowrap justify-start md:justify-around md:flex-wrap">
-          <TabsTrigger value="analytics" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4">
-            <BarChart2 className="w-3 h-3" />
-            Analytics
+        <TabsList className="bg-gray-100/50 p-1.5 rounded-[2rem] mb-8 flex w-full overflow-x-auto no-scrollbar scrollbar-hide flex-nowrap justify-start lg:justify-around border-4 border-white/50 shadow-inner">
+          <TabsTrigger value="analytics" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4 py-3 transition-all">
+            <BarChart2 className="w-3 h-3 mr-1.5 hidden md:inline" />
+            Stats
           </TabsTrigger>
-          <TabsTrigger value="orders" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Orders</TabsTrigger>
-          <TabsTrigger value="users" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Users</TabsTrigger>
-          <TabsTrigger value="categories" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Categories</TabsTrigger>
-          <TabsTrigger value="offers" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 text-center">
-            <Percent className="w-3 h-3" />
-            Offers
-          </TabsTrigger>
-          <TabsTrigger value="inventory" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Inventory</TabsTrigger>
-          <TabsTrigger value="add" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4">Add</TabsTrigger>
-          <TabsTrigger value="bulk" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 whitespace-nowrap">
+          <TabsTrigger value="orders" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4 py-3 transition-all">Orders</TabsTrigger>
+          <TabsTrigger value="users" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4 py-3 transition-all">Users</TabsTrigger>
+          <TabsTrigger value="categories" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4 py-3 transition-all">Cats</TabsTrigger>
+          <TabsTrigger value="inventory" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4 py-3 transition-all">Items</TabsTrigger>
+          <TabsTrigger value="add" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] px-4 py-3 transition-all">Add</TabsTrigger>
+          <TabsTrigger value="bulk" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 py-3 transition-all">
             <FileUp className="w-3 h-3" />
             Bulk
           </TabsTrigger>
-          <TabsTrigger value="ai" className="min-w-[100px] md:flex-1 rounded-xl data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 whitespace-nowrap">
+          <TabsTrigger value="ai" className="min-w-[100px] md:flex-1 rounded-[1.5rem] data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-lg font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 px-4 py-3 transition-all">
             <Sparkles className="w-3 h-3" />
-            Lab
+            AI Lab
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="analytics" className="mt-0 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <TabsContent value="analytics" className="mt-0 space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
+              <CardContent className="p-4 md:p-6">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-2 md:gap-4 text-center md:text-left">
                   <div className="bg-green-50 p-3 rounded-2xl text-green-600">
-                    <IndianRupee className="w-6 h-6" />
+                    <IndianRupee className="w-5 h-5 md:w-6 md:h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Lifetime Revenue</p>
-                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">₹{orders.filter(o => o.status === 'delivered').reduce((acc, o) => acc + (o.total || 0), 0)}</h4>
+                    <p className="text-[8px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Revenue</p>
+                    <h4 className="text-lg md:text-2xl font-black text-gray-900 tracking-tighter mt-1">₹{orders.filter(o => o.status === 'delivered').reduce((acc, o) => acc + (o.total || 0), 0)}</h4>
                   </div>
                 </div>
               </CardContent>
             </Card>
             <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
+              <CardContent className="p-4 md:p-6">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-2 md:gap-4 text-center md:text-left">
                   <div className="bg-red-50 p-3 rounded-2xl text-red-600">
-                    <ShoppingBag className="w-6 h-6" />
+                    <ShoppingBag className="w-5 h-5 md:w-6 md:h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Delivered Orders</p>
-                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">{orders.filter(o => o.status === 'delivered').length}</h4>
+                    <p className="text-[8px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Orders</p>
+                    <h4 className="text-lg md:text-2xl font-black text-gray-900 tracking-tighter mt-1">{orders.filter(o => o.status === 'delivered').length}</h4>
                   </div>
                 </div>
               </CardContent>
             </Card>
             <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
+              <CardContent className="p-4 md:p-6">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-2 md:gap-4 text-center md:text-left">
                   <div className="bg-blue-50 p-3 rounded-2xl text-blue-600">
-                    <Users className="w-6 h-6" />
+                    <Users className="w-5 h-5 md:w-6 md:h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Avg. Order Value</p>
-                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">
+                    <p className="text-[8px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Avg. Value</p>
+                    <h4 className="text-lg md:text-2xl font-black text-gray-900 tracking-tighter mt-1">
                       ₹{orders.filter(o => o.status === 'delivered').length > 0 
                         ? Math.round(orders.filter(o => o.status === 'delivered').reduce((acc, o) => acc + (o.total || 0), 0) / orders.filter(o => o.status === 'delivered').length)
                         : 0}
@@ -514,14 +674,14 @@ export function AdminDashboard() {
               </CardContent>
             </Card>
             <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
+              <CardContent className="p-4 md:p-6">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-2 md:gap-4 text-center md:text-left">
                   <div className="bg-purple-50 p-3 rounded-2xl text-purple-600">
-                    <TrendingUp className="w-6 h-6" />
+                    <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Success Rate</p>
-                    <h4 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">
+                    <p className="text-[8px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Success</p>
+                    <h4 className="text-lg md:text-2xl font-black text-gray-900 tracking-tighter mt-1">
                       {orders.length > 0 ? Math.round((orders.filter(o => o.status === 'delivered').length / orders.length) * 100) : 0}%
                     </h4>
                   </div>
@@ -740,14 +900,38 @@ export function AdminDashboard() {
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Target: "{banner.searchQuery}"</p>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl"
-                          onClick={() => handleDeleteBanner(banner.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {confirmBannerDeleteId === banner.id ? (
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              className="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] rounded-xl h-8 px-3"
+                              onClick={() => {
+                                handleDeleteBanner(banner.id);
+                                setConfirmBannerDeleteId(null);
+                              }}
+                              disabled={isDeleting === banner.id}
+                            >
+                              {isDeleting === banner.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : "Confirm"}
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              className="text-gray-400 font-bold text-[10px] h-8 px-2"
+                              onClick={() => setConfirmBannerDeleteId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl"
+                            onClick={() => setConfirmBannerDeleteId(banner.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     ))}
                     {banners.length === 0 && (
@@ -776,7 +960,7 @@ export function AdminDashboard() {
                             <Package className="w-6 h-6 text-gray-400" />
                           </div>
                           <div>
-                            <p className="font-black text-gray-900 tracking-tight">Order #{order.id.slice(-5)}</p>
+                            <p className="font-black text-gray-900 tracking-tight">Order #{order.orderNumber || order.id.slice(-5)}</p>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{order.createdAt?.toDate().toLocaleString()}</p>
                           </div>
                           <Badge className={`uppercase text-[10px] font-black px-3 py-1 rounded-full ${
@@ -1026,6 +1210,26 @@ export function AdminDashboard() {
                       onChange={(e) => setNewCategory({...newCategory, icon: e.target.value})}
                     />
                   </div>
+                  <div className="space-y-4">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category Image</Label>
+                    <div className="flex flex-col gap-4">
+                      {newCategory.image && (
+                        <div className="w-full h-32 rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center p-2">
+                          <img src={newCategory.image} className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" />
+                        </div>
+                      )}
+                      <Input 
+                        placeholder="Image URL (Optional)" 
+                        className="rounded-xl border-gray-100"
+                        value={newCategory.image}
+                        onChange={(e) => setNewCategory({...newCategory, image: e.target.value})}
+                      />
+                      <ImageGenerator 
+                        onImageGenerated={(url) => setNewCategory({...newCategory, image: url})}
+                        promptOverride={`${newCategory.name} icon minimal clean grocery category high quality`}
+                      />
+                    </div>
+                  </div>
                   <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-black rounded-xl h-12">
                     <Plus className="w-4 h-4 mr-2" /> Add Category
                   </Button>
@@ -1042,37 +1246,105 @@ export function AdminDashboard() {
                 <ScrollArea className="h-[500px]">
                   <div className="divide-y divide-gray-50">
                     {categories.map((cat) => (
-                      <div key={cat.id} className="p-6 flex items-center justify-between group">
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-3xl border border-red-100 shadow-sm group-hover:scale-105 transition-transform">
-                            {cat.icon}
+                      <div key={cat.id} className="p-6 flex flex-col gap-4 group hover:bg-gray-50/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-3xl border border-red-100 shadow-sm relative overflow-hidden">
+                              {cat.image ? (
+                                <img src={cat.image} className="w-full h-full object-contain p-2" referrerPolicy="no-referrer" />
+                              ) : (
+                                cat.icon
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-black text-gray-900 tracking-tight text-lg">{cat.name}</p>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                {products.filter(p => p.category === cat.name).length} Products
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-black text-gray-900 tracking-tight text-lg">{cat.name}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                              {products.filter(p => p.category === cat.name).length} Products
-                            </p>
+                          <div className="flex items-center gap-2">
+                            {confirmCategoryDeleteId === cat.id ? (
+                              <div className="flex gap-1">
+                                <Button 
+                                  size="sm" 
+                                  className="bg-red-600 hover:bg-red-700 text-white font-black text-[9px] rounded-lg h-7 px-2"
+                                  onClick={() => {
+                                    handleDeleteCategory(cat.id);
+                                    setConfirmCategoryDeleteId(null);
+                                  }}
+                                  disabled={isDeleting === cat.id}
+                                >
+                                  {isDeleting === cat.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Confirm"}
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  className="text-gray-400 font-bold text-[9px] h-7 px-2"
+                                  onClick={() => setConfirmCategoryDeleteId(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl"
+                                onClick={() => setConfirmCategoryDeleteId(cat.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100">
-                            {['🌾', '🛢️', '🧼', '🌶️', '🥛', '🍪', '🍎', '🥩', '🍞'].map(emoji => (
-                              <button
-                                key={emoji}
-                                onClick={() => handleUpdateCategoryIcon(cat.id, emoji)}
-                                className={`w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white hover:shadow-sm transition-all ${cat.icon === emoji ? 'bg-white shadow-sm ring-1 ring-red-100' : ''}`}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5 text-center md:text-left">
+                            <Label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Update Icon</Label>
+                            <div className="flex flex-wrap gap-1 bg-gray-100/50 p-1 rounded-xl border border-gray-100">
+                              {['🌾', '🛢️', '🧼', '🌶️', '🥛', '🍪', '🍎', '🥩', '🍞', '🥦', '🍦', '🥫'].map(emoji => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => handleUpdateCategoryIcon(cat.id, emoji)}
+                                  className={`w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white hover:shadow-sm transition-all text-sm ${cat.icon === emoji ? 'bg-white shadow-sm ring-1 ring-red-100' : ''}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
                           </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Update Image URL</Label>
+                            <div className="flex gap-2">
+                              <Input 
+                                placeholder="https://..." 
+                                defaultValue={cat.image || ''}
+                                className="rounded-xl h-8 text-[10px] font-bold"
+                                onBlur={(e) => handleUpdateCategoryImage(cat.id, e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t border-gray-50 mt-2">
                           <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl"
-                            onClick={() => handleDeleteCategory(cat.id)}
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1 h-7 rounded-lg text-[9px] font-black uppercase text-red-600 hover:bg-red-50 border-red-100"
+                            onClick={() => handleApplyCategoryDiscount(cat.name, 10)}
+                            disabled={isSyncing}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            Apply 10% Discount
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1 h-7 rounded-lg text-[9px] font-black uppercase text-red-600 hover:bg-red-50 border-red-100"
+                            onClick={() => handleApplyCategoryDiscount(cat.name, 20)}
+                            disabled={isSyncing}
+                          >
+                            Apply 20% Discount
                           </Button>
                         </div>
                       </div>
@@ -1090,24 +1362,72 @@ export function AdminDashboard() {
           </div>
         </TabsContent>
 
-        <TabsContent value="inventory" className="mt-0">
+        <TabsContent value="inventory" className="mt-0 space-y-6">
+          <Card className="border-none shadow-sm rounded-3xl bg-white p-6">
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+              <div className="relative w-full md:max-w-sm">
+                <Input 
+                  placeholder="Search products..." 
+                  className="rounded-xl pl-10 border-gray-100 bg-gray-50/50"
+                  value={inventorySearch}
+                  onChange={(e) => setInventorySearch(e.target.value)}
+                />
+                <ShoppingBag className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              </div>
+              <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
+                {(['all', 'available', 'out_of_stock', 'unavailable'] as const).map((f) => (
+                  <Button
+                    key={f}
+                    variant={inventoryFilter === f ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setInventoryFilter(f)}
+                    className={`rounded-full px-4 font-black text-[10px] uppercase tracking-widest ${
+                      inventoryFilter === f ? 'bg-red-600 text-white' : 'border-gray-100 text-gray-500'
+                    }`}
+                  >
+                    {f.replace('_', ' ')}
+                  </Button>
+                ))}
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleClearAllProducts}
+                  className="rounded-full text-red-500 font-bold text-[10px] px-4"
+                >
+                  <Trash2 className="w-3 h-3 mr-1" /> Clear All
+                </Button>
+              </div>
+            </div>
+          </Card>
+
           <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
             <CardContent className="p-0">
               <ScrollArea className="h-[700px]">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 divide-x divide-y divide-gray-50">
-                  {products.map((product) => (
-                    <div key={product.id} className="p-6 hover:bg-gray-50/50 transition-colors flex flex-col gap-4">
+                  {products
+                    .filter(p => 
+                      (inventoryFilter === 'all' || p.status === inventoryFilter) &&
+                      p.name.toLowerCase().includes(inventorySearch.toLowerCase())
+                    )
+                    .map((product) => (
+                    <div key={product.id} className="p-6 hover:bg-gray-50/50 transition-colors flex flex-col gap-4 group">
                       <div className="flex items-start justify-between gap-4">
-                        <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 p-2 flex-shrink-0">
+                        <div className="w-24 h-24 rounded-2xl overflow-hidden bg-white border border-gray-100 p-2 flex-shrink-0 shadow-sm relative group">
                           <img 
                             src={product.image} 
                             alt={product.name} 
-                            className={`w-full h-full object-contain ${product.status === 'unavailable' ? 'grayscale opacity-50' : ''}`} 
+                            className={`w-full h-full object-contain transition-transform group-hover:scale-110 ${product.status === 'unavailable' ? 'grayscale opacity-50' : ''}`} 
                             referrerPolicy="no-referrer" 
                           />
+                          <button 
+                            onClick={() => setEditingProduct(product)}
+                            className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"
+                          >
+                            <Sparkles className="w-5 h-5 mr-1" /> Edit
+                          </button>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-black text-gray-900 tracking-tight leading-tight">{product.name}</h4>
+                          <h4 className="font-black text-gray-900 tracking-tight leading-tight group-hover:text-red-600 transition-colors">{product.name}</h4>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{product.category}</p>
                           <div className="flex items-baseline gap-2 mt-2">
                             <p className="text-xl font-black text-red-700">₹{product.price}</p>
@@ -1115,12 +1435,12 @@ export function AdminDashboard() {
                               <p className="text-[10px] font-bold text-gray-400 line-through">₹{product.mrp}</p>
                             )}
                           </div>
-                          <Badge className={`mt-2 text-[10px] font-black uppercase tracking-widest ${
-                            product.status === 'available' ? 'bg-red-100 text-red-700' :
+                          <Badge className={`mt-2 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 ${
+                            product.status === 'available' ? 'bg-green-100 text-green-700' :
                             product.status === 'out_of_stock' ? 'bg-orange-100 text-orange-700' :
                             'bg-gray-100 text-gray-700'
                           }`}>
-                            {product.status.replace('_', ' ')}
+                            {product.status?.replace('_', ' ') || 'available'}
                           </Badge>
                         </div>
                       </div>
@@ -1141,7 +1461,7 @@ export function AdminDashboard() {
                             className="rounded-xl border-orange-200 text-orange-700 hover:bg-orange-50 font-black text-[10px] uppercase tracking-widest h-10"
                             onClick={() => handleUpdateProductStatus(product.id, 'out_of_stock')}
                           >
-                            <AlertCircle className="w-3 h-3 mr-2" /> Out Stock
+                            <AlertCircle className="w-3 h-3 mr-2" /> Mark Out
                           </Button>
                         )}
 
@@ -1165,28 +1485,154 @@ export function AdminDashboard() {
                           </Button>
                         )}
 
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="col-span-2 rounded-xl text-red-500 hover:text-red-700 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest h-10"
-                          onClick={() => handleDeleteProduct(product.id)}
-                          disabled={isDeleting === product.id}
-                        >
-                          {isDeleting === product.id ? (
-                            <Loader2 className="w-3 h-3 animate-spin mr-2" />
-                          ) : (
+                        {confirmDeleteId === product.id ? (
+                          <div className="col-span-2 flex gap-2">
+                            <Button 
+                              size="sm" 
+                              className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase tracking-widest h-10"
+                              onClick={() => {
+                                handleDeleteProduct(product.id);
+                                setConfirmDeleteId(null);
+                              }}
+                              disabled={isDeleting === product.id}
+                            >
+                              {isDeleting === product.id ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Trash2 className="w-3 h-3 mr-2" />}
+                              Confirm Delete
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              className="flex-1 rounded-xl border-gray-200 text-gray-500 font-black text-[10px] h-10"
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="col-span-2 rounded-xl text-red-500 hover:text-red-700 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest h-10"
+                            onClick={() => setConfirmDeleteId(product.id)}
+                          >
                             <Trash2 className="w-3 h-3 mr-2" />
-                          )}
-                          Remove Product
-                        </Button>
+                            Delete Permanently
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
+                  {products.length === 0 && (
+                    <div className="col-span-full py-40 text-center">
+                      <DatabaseBackup className="w-16 h-16 text-gray-100 mx-auto mb-4" />
+                      <p className="font-black text-gray-900 tracking-tight text-xl">Inventory Empty</p>
+                      <p className="text-gray-400 font-bold mt-2">Click "Sync Products" or "Add" to populate your store.</p>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Edit Product Modal */}
+        <AnimatePresence>
+          {editingProduct && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+              >
+                <div className="p-8 bg-red-600 text-white flex justify-between items-center">
+                  <div>
+                    <h3 className="text-2xl font-black tracking-tight">Edit Product</h3>
+                    <p className="text-red-100 font-bold text-xs uppercase tracking-widest mt-1">Updating: {editingProduct.name}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => setEditingProduct(null)} className="text-white hover:bg-red-700 rounded-full h-12 w-12 transition-transform active:scale-95">
+                    <XCircle className="w-7 h-7" />
+                  </Button>
+                </div>
+                <form onSubmit={handleEditProduct} className="p-8 space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</Label>
+                      <Input 
+                        value={editingProduct.name} 
+                        onChange={e => setEditingProduct({...editingProduct, name: e.target.value})}
+                        className="rounded-xl border-gray-100 font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</Label>
+                      <select 
+                        value={editingProduct.category} 
+                        onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}
+                        className="w-full h-10 rounded-xl border border-gray-100 bg-white px-3 font-bold"
+                      >
+                        {categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Price (₹)</Label>
+                      <Input 
+                        type="number"
+                        value={editingProduct.price} 
+                        onChange={e => setEditingProduct({...editingProduct, price: Number(e.target.value)})}
+                        className="rounded-xl border-gray-100 font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">MRP (₹)</Label>
+                      <Input 
+                        type="number"
+                        value={editingProduct.mrp || ''} 
+                        onChange={e => setEditingProduct({...editingProduct, mrp: e.target.value ? Number(e.target.value) : undefined})}
+                        className="rounded-xl border-gray-100 font-bold"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</Label>
+                    <Input 
+                      value={editingProduct.description} 
+                      onChange={e => setEditingProduct({...editingProduct, description: e.target.value})}
+                      className="rounded-xl border-gray-100 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Product Image</Label>
+                    <div className="flex flex-col md:flex-row gap-4 items-start">
+                      <div className="w-32 h-32 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0">
+                        {editingProduct.image ? (
+                          <img src={editingProduct.image} className="w-full h-full object-contain p-2" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-300">No Image</div>
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-4 w-full">
+                        <Input 
+                          value={editingProduct.image} 
+                          onChange={e => setEditingProduct({...editingProduct, image: e.target.value})}
+                          placeholder="Image URL"
+                          className="rounded-xl border-gray-100 text-xs font-medium"
+                        />
+                        <ImageGenerator 
+                          onImageGenerated={(url) => setEditingProduct({...editingProduct, image: url})}
+                          promptOverride={`${editingProduct.name} realistic product photo high quality grocery`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-black h-14 rounded-2xl shadow-xl shadow-red-100 active:scale-95 transition-all text-lg">
+                    SAVE CHANGES
+                  </Button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         <TabsContent value="add" className="mt-0">
           <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white max-w-2xl mx-auto">
@@ -1203,11 +1649,11 @@ export function AdminDashboard() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selling Price (₹)</Label>
-                    <Input required type="number" className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} placeholder="450" />
+                    <Input required type="number" className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})} placeholder="450" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">MRP (₹) - Optional</Label>
-                    <Input type="number" className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.mrp} onChange={e => setNewProduct({...newProduct, mrp: e.target.value})} placeholder="500" />
+                    <Input type="number" className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.mrp} onChange={e => setNewProduct({...newProduct, mrp: e.target.value ? Number(e.target.value) : undefined})} placeholder="500" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</Label>
@@ -1223,9 +1669,30 @@ export function AdminDashboard() {
                       ))}
                     </select>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Image URL</Label>
-                    <Input required className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} placeholder="https://..." />
+                  <div className="space-y-4 md:col-span-2">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Product Image</Label>
+                    <div className="flex flex-col md:flex-row gap-4 items-start">
+                      <div className="w-32 h-32 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0">
+                        {newProduct.image ? (
+                          <img src={newProduct.image} className="w-full h-full object-contain p-2" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-300">No Image</div>
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-4 w-full">
+                        <Input 
+                          required 
+                          className="rounded-xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-red-500 h-12 font-bold" 
+                          value={newProduct.image} 
+                          onChange={e => setNewProduct({...newProduct, image: e.target.value})} 
+                          placeholder="Image URL (Manual or AI generated)" 
+                        />
+                        <ImageGenerator 
+                          onImageGenerated={(url) => setNewProduct({...newProduct, image: url})}
+                          promptOverride={`${newProduct.name} realistic product photo high quality grocery`}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">

@@ -15,47 +15,60 @@ import { AuthModal } from "@/src/components/AuthModal";
 import { AdminDashboard } from "@/src/components/AdminDashboard";
 import { DeliveryDashboard } from "@/src/components/DeliveryDashboard";
 import { UserOrders } from "@/src/components/UserOrders";
+import { Profile } from "@/src/components/Profile";
 import { SplashScreen } from "@/src/components/SplashScreen";
 import { SlidingBanner } from "@/src/components/SlidingBanner";
+import { CategoriesPage } from "@/src/components/CategoriesPage";
+import { ProductDetails } from "@/src/components/ProductDetails";
+import { ProductReviews } from "@/src/components/ProductReviews";
+import { BrandLogo } from "@/src/components/BrandLogo";
 import { auth, db } from "@/src/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, query, onSnapshot, orderBy, setDoc, serverTimestamp, where } from "firebase/firestore";
+import { doc, getDoc, collection, query, onSnapshot, orderBy, setDoc, serverTimestamp, where, limit } from "firebase/firestore";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingBag, Sparkles, Home as HomeIcon, LogOut, User as UserIcon, ShieldCheck, Loader2, Package, Navigation, Ban } from "lucide-react";
+import { ShoppingBag, Sparkles, Home as HomeIcon, LogOut, User as UserIcon, ShieldCheck, Loader2, Package, Navigation, Ban, LayoutGrid, Clock, Percent, Star, Heart, ArrowUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface CartItem extends Product {
   quantity: number;
 }
 
-type Page = 'home' | 'checkout' | 'auth' | 'admin' | 'orders' | 'delivery' | 'blocked';
+type Page = 'home' | 'checkout' | 'auth' | 'admin' | 'orders' | 'delivery' | 'blocked' | 'profile' | 'categories' | 'offers' | 'buy-again' | 'product-details' | 'wishlist';
 
 export default function App() {
+  const [currentPage, setCurrentPage] = useState<Page>('home');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProductForReview, setSelectedProductForReview] = useState<any | null>(null);
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    const saved = localStorage.getItem('jmb_wishlist');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [cart, setCart] = useState<CartItem[]>(() => {
     const savedCart = localStorage.getItem('jmb_cart');
     return savedCart ? JSON.parse(savedCart) : [];
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState<Page>('home');
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [deliveryTasksCount, setDeliveryTasksCount] = useState(0);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+  const [hideOutOfStock, setHideOutOfStock] = useState(false);
   const [storeProducts, setStoreProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<{name: string, icon: string}[]>([
-    { name: 'Grains', icon: '🌾' },
-    { name: 'Oils', icon: '🛢️' },
-    { name: 'Soaps', icon: '🧼' },
-    { name: 'Spices', icon: '🌶️' },
-    { name: 'Dairy', icon: '🥛' },
-    { name: 'Snacks', icon: '🍪' },
+    { name: 'Fresh Vegetables', icon: '🥦' },
+    { name: 'Fresh Fruits', icon: '🍎' },
+    { name: 'Milk & Milk Products', icon: '🥛' },
+    { name: 'Chips & Namkeens', icon: '🍟' },
+    { name: 'Biscuits & Cookies', icon: '🍪' },
+    { name: 'Atta, Flours & Sooji', icon: '🌾' },
   ]);
   const [isProductsLoading, setIsProductsLoading] = useState(true);
+  const [recentlyDeliveredItems, setRecentlyDeliveredItems] = useState<any[]>([]);
 
   useEffect(() => {
     localStorage.setItem('jmb_cart', JSON.stringify(cart));
@@ -67,6 +80,15 @@ export default function App() {
         .catch(err => console.error("Error syncing cart:", err));
     }
   }, [cart, user]);
+
+  useEffect(() => {
+    localStorage.setItem('jmb_wishlist', JSON.stringify(wishlist));
+    if (user) {
+      const userRef = doc(db, "users", user.uid);
+      setDoc(userRef, { wishlist, updatedAt: serverTimestamp() }, { merge: true })
+        .catch(err => console.error("Error syncing wishlist:", err));
+    }
+  }, [wishlist, user]);
 
   useEffect(() => {
     const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
@@ -120,6 +142,10 @@ export default function App() {
           return;
         }
         
+        if (userData.wishlist) {
+          setWishlist(userData.wishlist);
+        }
+        
         // Force phone number connection if missing
         if (!userData.phoneNumber) {
           setCurrentPage('auth');
@@ -171,6 +197,20 @@ export default function App() {
       if (currentUser) {
         setUser(currentUser);
         await fetchUserProfile(currentUser.uid);
+        
+        // Listen for recent orders to show feedback section
+        const ordersQ = query(
+          collection(db, "orders"),
+          where("userId", "==", currentUser.uid),
+          where("status", "==", "delivered"),
+          orderBy("createdAt", "desc"),
+          limit(1)
+        );
+        onSnapshot(ordersQ, (snapshot) => {
+          if (!snapshot.empty) {
+            setRecentlyDeliveredItems(snapshot.docs[0].data().items || []);
+          }
+        });
       } else {
         setUser(null);
         setUserRole(null);
@@ -235,12 +275,41 @@ export default function App() {
   };
 
   const filteredProducts = useMemo(() => {
-    return storeProducts.filter(p => 
-      (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchQuery.toLowerCase())) &&
-      p.status !== 'unavailable' // Hide unavailable products from shop
+    return storeProducts.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         p.category.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const isOffer = searchQuery.toLowerCase() === 'offers' && p.mrp && p.mrp > p.price;
+      
+      const isMatch = matchSearch || isOffer;
+      
+      return isMatch &&
+             p.status !== 'unavailable' && 
+             (!hideOutOfStock || p.status !== 'out_of_stock');
+    });
+  }, [searchQuery, storeProducts, hideOutOfStock]);
+
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const toggleWishlist = (productId: string) => {
+    setWishlist(prev => 
+      prev.includes(productId) 
+        ? prev.filter(id => id !== productId) 
+        : [...prev, productId]
     );
-  }, [searchQuery, storeProducts]);
+  };
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -253,6 +322,19 @@ export default function App() {
       return [...prev, { ...product, quantity: 1 }];
     });
     setIsCartOpen(true);
+  };
+
+  const handleOpenDetails = (product: Product) => {
+    setSelectedProduct(product);
+    setCurrentPage('product-details');
+  };
+
+  const handleBuyNow = (product: Product) => {
+    const inCart = cart.find(item => item.id === product.id);
+    if (!inCart) {
+      addToCart(product);
+    }
+    setCurrentPage('checkout');
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -286,6 +368,8 @@ export default function App() {
         userRole={userRole}
         userProfile={userProfile}
         currentPage={currentPage}
+        wishlistCount={wishlist.length}
+        onOpenWishlist={() => setCurrentPage('wishlist')}
       />
 
       <main className="container mx-auto px-4 md:px-6 py-4 md:py-8 max-w-7xl">
@@ -319,12 +403,88 @@ export default function App() {
               Logout
             </Button>
           </div>
-        ) : currentPage === 'orders' ? (
+        ) : currentPage === 'orders' || currentPage === 'buy-again' ? (
           <UserOrders />
+        ) : currentPage === 'profile' ? (
+          <Profile onLogout={handleLogout} onNavigate={setCurrentPage} />
+        ) : currentPage === 'wishlist' ? (
+          <div className="space-y-8">
+            <div className="border-b-4 border-gray-900 pb-4 flex items-end justify-between">
+              <div>
+                <h2 className="text-4xl md:text-6xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans">Wishlist</h2>
+                <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Your favorite items saved for later</p>
+              </div>
+              <Button 
+                variant="ghost" 
+                onClick={() => setCurrentPage('home')}
+                className="text-gray-400 font-bold hover:text-red-600 uppercase tracking-widest text-xs"
+              >
+                Continue Shopping
+              </Button>
+            </div>
+            {wishlist.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center">
+                  <Heart className="w-10 h-10 text-gray-200" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black text-gray-900 uppercase">Your wishlist is empty</h3>
+                  <p className="text-sm font-bold text-gray-400">Tap the heart on any product to save it here.</p>
+                </div>
+                <Button 
+                  onClick={() => setCurrentPage('home')}
+                  className="bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl px-8 h-14 uppercase tracking-widest shadow-xl shadow-red-100"
+                >
+                  Explore Products
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {storeProducts.filter(p => wishlist.includes(p.id)).map(product => (
+                  <ProductCard 
+                    key={product.id} 
+                    product={product} 
+                    onAddToCart={addToCart}
+                    onOpenDetails={handleOpenDetails}
+                    isWishlisted={true}
+                    onToggleWishlist={() => toggleWishlist(product.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : currentPage === 'product-details' && selectedProduct ? (
+          <ProductDetails 
+            product={selectedProduct} 
+            onBack={() => setCurrentPage('home')} 
+            onAddToCart={addToCart} 
+            onBuyNow={handleBuyNow} 
+          />
+        ) : currentPage === 'categories' ? (
+          <CategoriesPage onCategorySelect={(cat) => {
+            setSearchQuery(cat);
+            setCurrentPage('home');
+          }} />
         ) : currentPage === 'home' ? (
           <div className="space-y-8">
             {/* Sliding Banner */}
             {!searchQuery && <SlidingBanner onAction={setSearchQuery} />}
+
+            {/* Quick Search for Mobile/Home */}
+            <div className="relative group md:hidden">
+              <input 
+                type="text" 
+                placeholder="What are you looking for?" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white border-none rounded-[1.5rem] h-14 px-6 pr-12 text-sm font-bold shadow-xl shadow-gray-100 focus:ring-4 focus:ring-red-100 transition-all placeholder:text-gray-300"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-red-600 rounded-xl shadow-lg shadow-red-100">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+            </div>
+
+
 
             {/* Category Section */}
             {!searchQuery && (
@@ -367,7 +527,7 @@ export default function App() {
                 <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 md:pb-8 scrollbar-hide -mx-4 px-4 mask-fade-right">
                   {storeProducts.slice(0, 5).map(product => (
                     <div key={product.id} className="min-w-[180px] sm:min-w-[220px] md:min-w-[260px]">
-                      <ProductCard product={product} onAddToCart={addToCart} />
+                      <ProductCard product={product} onAddToCart={addToCart} onOpenDetails={handleOpenDetails} />
                     </div>
                   ))}
                 </div>
@@ -384,7 +544,15 @@ export default function App() {
                   <h3 className="text-2xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none font-sans italic">
                     {searchQuery ? `"${searchQuery}"` : 'Everything'}
                   </h3>
-                  <div className="text-right">
+                  <div className="text-right flex items-center gap-4">
+                    <button 
+                      onClick={() => setHideOutOfStock(!hideOutOfStock)}
+                      className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all border ${
+                        hideOutOfStock ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-gray-100 text-gray-400'
+                      }`}
+                    >
+                      {hideOutOfStock ? 'Showing Available' : 'Show All Stock'}
+                    </button>
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{filteredProducts.length} Products</p>
                   </div>
                 </div>
@@ -429,7 +597,10 @@ export default function App() {
                   <ProductCard 
                     key={product.id} 
                     product={product} 
-                    onAddToCart={addToCart} 
+                    onAddToCart={addToCart}
+                    onOpenDetails={handleOpenDetails}
+                    isWishlisted={wishlist.includes(product.id)}
+                    onToggleWishlist={() => toggleWishlist(product.id)}
                   />
                 ))}
               </div>
@@ -536,10 +707,11 @@ export default function App() {
       </Sheet>
 
       {/* Chatbot */}
-      <Chatbot />
+      <Chatbot user={user} userRole={userRole} />
 
       {/* Mobile Bottom Navigation */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md bg-white/90 backdrop-blur-xl border border-gray-200 py-3 px-2 flex justify-around items-center md:hidden z-50 rounded-[2rem] shadow-2xl shadow-gray-200">
+      {currentPage !== 'checkout' && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-md bg-white/90 backdrop-blur-xl border border-gray-200 py-3 px-2 flex justify-around items-center md:hidden z-50 rounded-[2rem] shadow-2xl shadow-gray-200">
         <Button 
           variant="ghost" 
           className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'home' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
@@ -548,63 +720,97 @@ export default function App() {
           <HomeIcon className="w-5 h-5" />
           <span className="text-[8px] font-black uppercase tracking-tighter">Home</span>
         </Button>
-        {user && userRole !== 'admin' && userRole !== 'delivery' && (
-          <Button 
-            variant="ghost" 
-            className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'orders' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
-            onClick={() => setCurrentPage('orders')}
-          >
-            <Package className="w-5 h-5" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Orders</span>
-          </Button>
-        )}
-        {userRole === 'admin' && (
-          <Button 
-            variant="ghost" 
-            className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'admin' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
-            onClick={() => setCurrentPage('admin')}
-          >
-            <ShieldCheck className="w-5 h-5" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Admin</span>
-          </Button>
-        )}
-        {userRole === 'delivery' && (
-          <Button 
-            variant="ghost" 
-            className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl relative ${currentPage === 'delivery' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
-            onClick={() => setCurrentPage('delivery')}
-          >
-            <Navigation className="w-5 h-5" />
-            {deliveryTasksCount > 0 && (
-              <span className="absolute top-1 right-3 bg-red-600 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-sm font-black">
-                {deliveryTasksCount}
-              </span>
-            )}
-            <span className="text-[8px] font-black uppercase tracking-tighter">Delivery</span>
-          </Button>
-        )}
+        
         <Button 
           variant="ghost" 
-          className="flex flex-col gap-1 h-auto flex-1 rounded-2xl text-gray-400 relative"
-          onClick={() => setIsCartOpen(true)}
+          className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'categories' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
+          onClick={() => setCurrentPage('categories')}
         >
-          <ShoppingBag className="w-5 h-5" />
-          {cartCount > 0 && (
-            <span className="absolute top-1 right-3 bg-red-600 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-sm font-black">
-              {cartCount}
-            </span>
-          )}
-          <span className="text-[8px] font-black uppercase tracking-tighter">Cart</span>
+          <LayoutGrid className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-tighter">Categories</span>
         </Button>
+
         <Button 
           variant="ghost" 
-          className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'auth' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
-          onClick={() => user ? handleLogout() : setCurrentPage('auth')}
+          className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'buy-again' || currentPage === 'orders' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
+          onClick={() => user ? setCurrentPage('buy-again') : setCurrentPage('auth')}
         >
-          {user ? <LogOut className="w-5 h-5" /> : <UserIcon className="w-5 h-5" />}
-          <span className="text-[8px] font-black uppercase tracking-tighter">{user ? 'Logout' : 'Login'}</span>
+          <Clock className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-tighter">Buy Again</span>
+        </Button>
+
+        <Button 
+          variant="ghost" 
+          className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${searchQuery === 'offers' ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
+          onClick={() => {
+            setSearchQuery('offers');
+            setCurrentPage('home');
+          }}
+        >
+          <Percent className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-tighter">Offers</span>
+        </Button>
+
+        <Button 
+          variant="ghost" 
+          className={`flex flex-col gap-1 h-auto flex-1 rounded-2xl ${currentPage === 'profile' || currentPage === 'auth' || (currentPage === 'admin' && userRole === 'admin') ? 'text-red-600 bg-red-50' : 'text-gray-400'}`}
+          onClick={() => {
+            if (!user) {
+              setCurrentPage('auth');
+            } else if (userRole === 'admin') {
+              setCurrentPage('admin');
+            } else if (userRole === 'delivery') {
+              setCurrentPage('delivery');
+            } else {
+              setCurrentPage('profile');
+            }
+          }}
+        >
+          <UserIcon className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-tighter">
+            {userRole === 'admin' ? 'Admin' : userRole === 'delivery' ? 'Delivery' : user ? 'Profile' : 'Account'}
+          </span>
         </Button>
       </div>
+    )}
+    
+    {/* Review Sheet for Quick Rating */}
+    <Sheet open={!!selectedProductForReview} onOpenChange={(open) => !open && setSelectedProductForReview(null)}>
+      <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl border-none">
+        <SheetHeader className="pb-4">
+          <SheetTitle className="flex items-center gap-2 text-red-700">
+            <Star className="w-5 h-5 fill-red-700" />
+            Product Review
+          </SheetTitle>
+        </SheetHeader>
+        {selectedProductForReview && (
+          <ProductReviews 
+            productId={selectedProductForReview.id} 
+            productName={selectedProductForReview.name} 
+          />
+        )}
+      </SheetContent>
+    </Sheet>
+    
+    {/* Scroll To Top */}
+    <AnimatePresence>
+      {showScrollTop && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          className="fixed bottom-24 right-4 z-50 md:bottom-8 md:right-8"
+        >
+          <Button
+            size="icon"
+            onClick={scrollToTop}
+            className="w-12 h-12 rounded-2xl bg-white text-red-600 shadow-2xl shadow-red-100 hover:bg-red-50 border border-red-50 active:scale-95 transition-transform"
+          >
+            <ArrowUp className="w-6 h-6" />
+          </Button>
+        </motion.div>
+      )}
+    </AnimatePresence>
     </div>
   );
 }

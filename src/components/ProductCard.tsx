@@ -5,15 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ProductReviews } from "./ProductReviews";
-import { MessageCircle, Star } from "lucide-react";
+import { MessageCircle, Star, Heart } from "lucide-react";
 import { motion } from "motion/react";
 
 interface ProductCardProps {
   product: Product;
   onAddToCart: (product: Product) => void;
+  onOpenDetails: (product: Product) => void;
+  isWishlisted?: boolean;
+  onToggleWishlist?: (productId: string) => void;
 }
 
-export const ProductCard = memo(function ProductCard({ product, onAddToCart }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ 
+  product, 
+  onAddToCart, 
+  onOpenDetails,
+  isWishlisted = false,
+  onToggleWishlist
+}: ProductCardProps) {
   const [showReviews, setShowReviews] = useState(false);
   const isOutOfStock = product.status === 'out_of_stock';
   const isAvailable = product.status === 'available' || !product.status;
@@ -23,6 +32,8 @@ export const ProductCard = memo(function ProductCard({ product, onAddToCart }: P
     <motion.div
       whileHover={{ y: -5 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      onClick={() => onOpenDetails(product)}
+      className="cursor-pointer"
     >
       <Card className={`overflow-hidden border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.1)] transition-all duration-300 group relative bg-white rounded-3xl ${!isAvailable ? 'opacity-75' : ''}`}>
         <div className="relative aspect-square overflow-hidden bg-gray-50/50 p-2 md:p-4">
@@ -39,18 +50,31 @@ export const ProductCard = memo(function ProductCard({ product, onAddToCart }: P
                 {discount}% OFF
               </Badge>
             )}
+            
+            <Button 
+              variant="secondary" 
+              size="icon" 
+              className={`w-8 h-8 rounded-xl backdrop-blur-md shadow-sm border-none transition-all scale-100 md:scale-0 md:group-hover:scale-100 flex items-center justify-center p-0 ${isWishlisted ? 'bg-red-50 text-red-600' : 'bg-white/80 text-gray-900 hover:bg-white'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleWishlist?.(product.id);
+              }}
+            >
+              <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-red-600' : ''}`} />
+            </Button>
+
             <Sheet open={showReviews} onOpenChange={setShowReviews}>
               <SheetTrigger 
                 render={
                   <Button 
                     variant="secondary" 
                     size="icon" 
-                    className="w-8 h-8 rounded-xl bg-white/80 backdrop-blur-md shadow-sm border-none hover:bg-white transition-all scale-100 md:scale-0 md:group-hover:scale-100"
-                  />
+                    className="w-8 h-8 rounded-xl bg-white/80 backdrop-blur-md shadow-sm border-none hover:bg-white transition-all scale-100 md:scale-0 md:group-hover:scale-100 flex items-center justify-center p-0"
+                  >
+                    <MessageCircle className="w-4 h-4 text-gray-900" />
+                  </Button>
                 }
-              >
-                <MessageCircle className="w-4 h-4 text-gray-900" />
-              </SheetTrigger>
+              />
               <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl border-none">
                 <SheetHeader className="pb-4">
                   <SheetTitle className="flex items-center gap-2 text-red-700">
@@ -88,7 +112,10 @@ export const ProductCard = memo(function ProductCard({ product, onAddToCart }: P
               </div>
             </div>
             <Button 
-              onClick={() => onAddToCart(product)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddToCart(product);
+              }}
               disabled={!isAvailable}
               size="sm"
               className="bg-red-600 hover:bg-red-700 text-white font-black text-[9px] md:text-[10px] h-9 md:h-10 px-4 md:px-6 rounded-xl md:rounded-2xl shadow-lg shadow-red-100 active:scale-95 transition-all uppercase tracking-widest"

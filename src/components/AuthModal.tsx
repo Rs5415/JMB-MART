@@ -181,6 +181,15 @@ export function AuthModal({ onComplete }: { onComplete: () => void }) {
     setIsLoading(true);
     setError(null);
     try {
+      if (type === 'register') {
+        const isUnique = await checkPhoneUniqueness(phoneNumber);
+        if (!isUnique) {
+          setError("This mobile number is already registered with another account.");
+          setIsLoading(false);
+          return;
+        }
+      }
+
       let user;
       if (type === 'register') {
         const result = await createUserWithEmailAndPassword(auth, email, password);
