@@ -101,74 +101,124 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
   const handleDownloadPDF = async () => {
     if (!billRef.current) return;
     setIsGenerating(true);
+    
     try {
+      // Ensure fonts are ready for clean capture
+      if (document.fonts) {
+        await document.fonts.ready;
+      }
+
       const canvas = await html2canvas(billRef.current, {
-        scale: 4, // Maximum quality
+        scale: 1.5, // Reduced scale for faster generation and lower memory footprint
         useCORS: true,
-        logging: true,
+        logging: false,
         backgroundColor: "#ffffff",
+        allowTaint: true,
         onclone: (clonedDoc) => {
+          // Remove all existing style/link tags that might contain oklch to prevent parser crashes
+          const styles = clonedDoc.getElementsByTagName('style');
+          for (let i = styles.length - 1; i >= 0; i--) {
+            if (styles[i].innerHTML.includes('oklch') || styles[i].innerHTML.includes('oklab')) {
+              styles[i].remove();
+            }
+          }
+          
+          const links = clonedDoc.getElementsByTagName('link');
+          for (let i = links.length - 1; i >= 0; i--) {
+            if (links[i].rel === 'stylesheet') {
+              links[i].remove();
+            }
+          }
+
+          // Inject global style override to force standard colors and kill oklch
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            :root, body, * {
+              --background: #ffffff !important;
+              --foreground: #000000 !important;
+              --primary: #000000 !important;
+              --primary-foreground: #ffffff !important;
+              --border: #e5e7eb !important;
+              --secondary: #f3f4f6 !important;
+              --muted: #f3f4f6 !important;
+              --accent: #f3f4f6 !important;
+              --destructive: #ef4444 !important;
+              --ring: #000000 !important;
+              box-shadow: none !important;
+              text-shadow: none !important;
+              transition: none !important;
+              animation: none !important;
+              color-scheme: light !important;
+              background-image: none !important;
+              outline-color: #000000 !important;
+              border-color: #e5e7eb !important;
+              font-family: 'Inter', sans-serif !important;
+            }
+            .bg-red-600 { background-color: #000000 !important; }
+            .bg-gray-900 { background-color: #000000 !important; }
+            .bg-white { background-color: #ffffff !important; }
+            .bg-gray-50 { background-color: #f9fafb !important; }
+            .text-red-600 { color: #000000 !important; }
+            .text-white { color: #ffffff !important; }
+            .text-gray-900 { color: #000000 !important; }
+            .border-gray-100 { border-color: #f3f4f6 !important; }
+            svg, path { fill: currentColor !important; stroke: currentColor !important; }
+          `;
+          clonedDoc.head.appendChild(style);
+          
+          // Deep manual sweep for ANY element that might have computed oklch
           const elements = clonedDoc.getElementsByTagName('*');
           for (let i = 0; i < elements.length; i++) {
             const el = elements[i] as HTMLElement;
-            // Force basic styles to avoid oklch errors in html2canvas/jsPDF
-            const style = window.getComputedStyle(el);
-            
-            // Helper to clean oklab/oklch from any computed style string
-            const hasOkl = (val: string) => val.includes('oklch') || val.includes('oklab') || val.includes('okl');
+            if (!el.style) continue;
 
-            // Fix text colors
-            if (hasOkl(el.style.color) || hasOkl(style.color)) {
-              el.style.color = '#111827'; 
-            }
-            
-            // Fix background colors
-            if (hasOkl(el.style.backgroundColor) || hasOkl(style.backgroundColor)) {
-              if (el.className.includes('bg-red-600')) el.style.backgroundColor = '#dc2626';
-              else if (el.className.includes('bg-green-600')) el.style.backgroundColor = '#16a34a';
-              else if (el.className.includes('bg-gray-50')) el.style.backgroundColor = '#f9fafb';
-              else if (el.className.includes('bg-white')) el.style.backgroundColor = '#ffffff';
-              else if (el.className.includes('bg-gray-900')) el.style.backgroundColor = '#111827';
-              else el.style.backgroundColor = 'transparent';
-            }
+            // We must read from window.getComputedStyle(el) which is the original style
+            // but we write to el.style (the cloned element)
+            const computed = window.getComputedStyle(el);
+            const propsToCheck = [
+              'color', 'background-color', 'border-color', 'fill', 'stroke'
+            ];
 
-            // Fix border colors
-            if (hasOkl(el.style.borderColor) || hasOkl(style.borderColor)) {
-              el.style.borderColor = '#e5e7eb';
-            }
+            propsToCheck.forEach(prop => {
+              const val = computed.getPropertyValue(prop);
+              if (val.includes('oklch') || val.includes('oklab')) {
+                let fallback = '#000000';
+                if (el.classList.contains('text-white') || el.classList.contains('bg-white')) {
+                  fallback = '#ffffff';
+                } else if (prop === 'background-color' && !val.includes('transparent')) {
+                  fallback = '#ffffff';
+                }
+                el.style.setProperty(prop, fallback, 'important');
+              }
+            });
 
-            // Fix Box Shadows - these often cause the oklab parsing error
-            if (hasOkl(el.style.boxShadow) || hasOkl(style.boxShadow)) {
-              el.style.boxShadow = 'none';
-            }
-
-            // Fix Fill/Stroke for SVGs
-            if (el instanceof SVGElement || el.tagName === 'svg' || el.tagName === 'path') {
-              const fill = style.getPropertyValue('fill');
-              const stroke = style.getPropertyValue('stroke');
-              if (hasOkl(fill)) el.setAttribute('fill', 'currentColor');
-              if (hasOkl(stroke)) el.setAttribute('stroke', 'currentColor');
+            if (computed.boxShadow.includes('oklch')) {
+              el.style.setProperty('box-shadow', 'none', 'important');
             }
           }
         }
       });
       
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/png', 0.8); // Slightly compressed
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: billFormat === 'a4' ? 'a4' : [80, 200]
+        format: billFormat === 'a4' ? 'a4' : [80, 250]
       });
       
-      const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgProps = pdf.getImageProperties(imgData);
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`JMB-MART-${billFormat.toUpperCase()}-${order.id?.slice(-8).toUpperCase()}.pdf`);
+      
+      // Use a more robust way to trigger download in iframes
+      const filename = `JMB-MART-${billFormat.toUpperCase()}-${order.id?.slice(-8).toUpperCase()}.pdf`;
+      pdf.save(filename);
+      
     } catch (error) {
-      console.error("Detailed PDF Error:", error);
-      alert("There was an issue generating the PDF. Please try the Print option instead.");
+      console.error("PDF Final Error:", error);
+      alert("Bill generation failed. Please try the 'Print' button instead, which is more reliable on this device.");
     } finally {
       setIsGenerating(false);
     }
@@ -234,28 +284,28 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
             <div className={`p-10 ${billFormat === 'receipt' ? 'pt-2' : 'pt-20'} transition-all duration-700`}>
               {/* BRANDING HEADER */}
               <div className="flex flex-col items-center mb-12 text-center">
-                <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-red-100 mb-6 relative overflow-hidden border-2 border-red-50">
+                <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-gray-100 mb-6 relative overflow-hidden border-2 border-gray-50">
                   <div className="relative flex flex-col items-center justify-center">
-                    <BrandLogo className="w-16 h-16 mb-4" />
+                    <BrandLogo className="w-16 h-16 mb-4 grayscale" />
                     <div className="flex flex-col items-center">
-                      <div className="bg-red-600 text-white font-black text-2xl px-3 py-1.5 rounded-xl mb-1 shadow-md w-fit leading-none">JMB</div>
-                      <div className="text-red-600 font-black text-lg tracking-tighter leading-none mb-1">MART</div>
-                      <p className="text-[8px] font-black tracking-[0.3em] text-red-600/60 uppercase">Jai Maa Bhavani</p>
+                      <div className="bg-black text-white font-black text-2xl px-3 py-1.5 rounded-xl mb-1 shadow-md w-fit leading-none italic">JMB</div>
+                      <div className="text-black font-black text-lg tracking-tighter leading-none mb-1">MART</div>
+                      <p className="text-[8px] font-black tracking-[0.3em] text-black/60 uppercase">Jai Maa Bhavani</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-red-50 rounded-full">
-                  <span className="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-red-600">Tax Sales Invoice</span>
+                <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-black">Tax Sales Invoice</span>
                 </div>
               </div>
 
-              {/* PAID/UNPAID STAMP (Overlays Content) */}
+              {/* Meta Info Stamp (Overlays Content) */}
               <div className="absolute top-40 right-10 pointer-events-none z-10 opacity-20 rotate-[-25deg]">
                 {isPaid ? (
-                  <div className="border-8 border-green-600 text-green-600 px-8 py-4 rounded-3xl text-6xl font-black uppercase tracking-tighter shadow-2xl">PAID</div>
+                  <div className="border-8 border-gray-900 text-gray-900 px-8 py-4 rounded-3xl text-6xl font-black uppercase tracking-tighter shadow-2xl">PAID</div>
                 ) : (
-                  <div className="border-8 border-red-600 text-red-600 px-8 py-4 rounded-3xl text-6xl font-black uppercase tracking-tighter shadow-2xl uppercase">UNPAID</div>
+                  <div className="border-8 border-gray-500 text-gray-500 px-8 py-4 rounded-3xl text-6xl font-black uppercase tracking-tighter shadow-2xl uppercase">UNPAID</div>
                 )}
               </div>
 
@@ -294,14 +344,14 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
               </div>
 
               {/* CUSTOMER SECTION */}
-              <div className="mb-12 border-l-4 border-red-600 pl-6 py-2 bg-red-50/30 rounded-r-2xl">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600/50 block mb-2">Delivery Address</span>
+              <div className="mb-12 border-l-4 border-black pl-6 py-2 bg-gray-50 rounded-r-2xl">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-2">Delivery Address</span>
                 <h3 className="text-lg font-black text-gray-900 leading-none mb-2">{order.address?.name}</h3>
                 <p className="text-xs font-semibold text-gray-600 max-w-[280px] leading-relaxed">
                   {order.address?.houseNumber}, {order.address?.pincode}
                 </p>
                 <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white text-[10px] font-black text-gray-900 rounded-xl border border-gray-100 shadow-sm">
-                  <span className="text-red-600">TEL</span> {order.address?.phone}
+                  <span className="text-black italic">TEL</span> {order.address?.phone}
                 </div>
               </div>
 
@@ -340,7 +390,7 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
               </div>
 
               {/* FINANCIALS */}
-              <div className="space-y-4 mb-12 bg-gray-900 p-8 rounded-[2rem] text-white shadow-2xl shadow-gray-200">
+              <div className="space-y-4 mb-12 bg-black p-8 rounded-[2rem] text-white">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-white/40 uppercase tracking-widest">Sub-Total</span>
                   <span className="font-bold text-white">₹{subtotal.toFixed(2)}</span>
@@ -352,60 +402,55 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
                 
                 <div className="pt-6 mt-6 border-t border-white/10 flex justify-between items-center">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-red-500 mb-1">Amount Due</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-1">Amount Due</p>
                     <p className="text-[10px] text-white/40 font-medium">Inclusive of all taxes</p>
                   </div>
                   <div className="text-right">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-sm font-black text-red-500 leading-none">₹</span>
+                      <span className="text-sm font-black text-gray-400 leading-none">₹</span>
                       <span className="text-4xl font-black tracking-tighter text-white leading-none italic">{total}</span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Scan to Pay Section */}
-                <div className="mt-8 pt-8 border-t border-white/5 flex flex-col items-center">
-                  <div className="bg-white p-3 rounded-2xl shadow-xl mb-4 group/qr transition-transform hover:scale-110 duration-500">
+              {/* PAYMENT QR (Single QR) */}
+              {!isPaid && (
+                <div className="mb-12 flex flex-col items-center">
+                  <div className="bg-white p-3 rounded-2xl shadow-xl border-2 border-gray-100 mb-4 group/qr transition-all hover:scale-105">
                     <img 
-                      src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=archanasharma993151@okaxis&pn=JMB%20Mart&tn=Order%20Payment&cu=INR" 
-                      className="w-32 h-32" 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`upi://pay?pa=archanasharma993151@okaxis&pn=JMB Mart&tn=Order Payment&cu=INR&am=${total}`)}`}
+                      className="w-32 h-32 grayscale contrast-125" 
                       alt="Payment QR" 
                     />
-                    <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] opacity-0 group-hover/qr:opacity-100 transition-opacity flex items-center justify-center rounded-2xl pointer-events-none">
-                      <span className="text-[8px] font-bold text-gray-900 bg-white/90 px-2 py-1 rounded-full shadow-sm">PAY NOW</span>
-                    </div>
                   </div>
                   <div className="flex flex-col items-center gap-1">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500">Scan to Pay via G-Pay/UPI</p>
-                    <p className="text-[8px] font-medium text-white/30 uppercase tracking-widest">Safe & Secure Transaction</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black">Scan to Pay via UPI</p>
+                    <p className="text-[8px] font-medium text-gray-400 uppercase tracking-widest">Safe & Secure Transaction</p>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* SIGNATURE / FOOTER */}
               <div className="flex flex-col items-center text-center">
                 <div className="w-full h-px bg-gray-100 mb-10" />
                 
-                <div 
-                  className="mb-8 p-6 bg-white rounded-[2rem] border-2 border-dashed border-gray-100 relative group transition-all hover:border-red-100 hover:scale-105 duration-500"
-                >
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=JMB-MART-BILL-VERIFIED-SYSTEM" className="w-24 h-24 opacity-80 mix-blend-multiply" alt="QR" />
-                  <div className="absolute -top-3 -right-3 w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg border-4 border-white rotate-12">
-                    <span className="text-[10px] font-black">OK</span>
-                  </div>
+                <div className="space-y-4 mb-8">
+                  <p className="text-[10px] font-black uppercase tracking-[0.5em] text-gray-300 italic">Official Digital Record</p>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter px-6">
+                    Authorized and Verified System Bill
+                  </p>
                 </div>
 
                 <div className="space-y-2 mb-8">
-                  <p className="text-[10px] font-black uppercase tracking-[0.5em] text-gray-200 italic">Official Digital Record</p>
                   <p className="text-[9px] font-black text-gray-400 px-10 leading-relaxed uppercase tracking-tighter">
                     Thank you for supporting Local Enterprise. Your satisfaction is our priority.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-6 opacity-30 grayscale contrast-125">
+                <div className="flex items-center gap-6 opacity-40 grayscale">
                   <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/MasterCard_Logo.svg" className="h-4" alt="Mastercard" />
                   <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" className="h-3" alt="Visa" />
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_Pay_Logo.svg" className="h-4" alt="Apple Pay" />
                 </div>
               </div>
             </div>
@@ -425,7 +470,7 @@ export function OrderBill({ order, isOpen, onClose }: OrderBillProps) {
                 </div>
               </div>
             ) : (
-              <div className="h-6 w-full mt-10" style={{ backgroundColor: '#dc2626' }} />
+              <div className="h-6 w-full mt-10 bg-black" />
             )}
           </div>
           </div>

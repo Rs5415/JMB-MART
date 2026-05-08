@@ -4,8 +4,8 @@ import { doc, getDoc, collection, query, where, getDocs } from "firebase/firesto
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { User, Mail, Calendar, Package, ShoppingBag, IndianRupee, LogOut, ShieldCheck, MapPin, Phone, ArrowRight, Settings, HelpCircle, Heart } from "lucide-react";
-import { motion } from "motion/react";
+import { User, Mail, Calendar, Package, ShoppingBag, IndianRupee, LogOut, ShieldCheck, MapPin, Phone, ArrowRight, Settings, HelpCircle, Heart, Trash2, X, Plus, Home, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 export function Profile({ onLogout, onNavigate }: { onLogout: () => void, onNavigate: (page: any) => void }) {
   const [profile, setProfile] = useState<any>(null);
@@ -15,38 +15,56 @@ export function Profile({ onLogout, onNavigate }: { onLogout: () => void, onNavi
     wishlistCount: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [showAddresses, setShowAddresses] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const fetchProfileAndStats = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        setProfile(userDoc.data());
+      }
+
+      const ordersQuery = query(collection(db, "orders"), where("userId", "==", user.uid));
+      const ordersSnap = await getDocs(ordersQuery);
+      const deliveredOrders = ordersSnap.docs.map(d => d.data()).filter(o => o.status === 'delivered');
+      
+      setStats({
+        totalSpent: deliveredOrders.reduce((acc, o) => acc + (o.total || 0), 0),
+        orderCount: ordersSnap.size,
+        wishlistCount: 0 
+      });
+    } catch (err) {
+      console.error("Error fetching profile stats:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchProfileAndStats = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      try {
-        // Fetch User Profile
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          setProfile(userDoc.data());
-        }
-
-        // Fetch Stats
-        const ordersQuery = query(collection(db, "orders"), where("userId", "==", user.uid));
-        const ordersSnap = await getDocs(ordersQuery);
-        const deliveredOrders = ordersSnap.docs.map(d => d.data()).filter(o => o.status === 'delivered');
-        
-        setStats({
-          totalSpent: deliveredOrders.reduce((acc, o) => acc + (o.total || 0), 0),
-          orderCount: ordersSnap.size,
-          wishlistCount: 0 // Placeholder for future feature
-        });
-      } catch (err) {
-        console.error("Error fetching profile stats:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchProfileAndStats();
   }, []);
+
+  const handleDeleteAddress = async (addressId: string) => {
+    const user = auth.currentUser;
+    if (!user || !profile) return;
+
+    setIsDeleting(addressId);
+    try {
+      const newAddresses = profile.savedAddresses.filter((a: any) => a.id !== addressId);
+      const userRef = doc(db, "users", user.uid);
+      const { updateDoc } = await import("firebase/firestore"); // Just to be safe with imports
+      await updateDoc(userRef, { savedAddresses: newAddresses });
+      setProfile({ ...profile, savedAddresses: newAddresses });
+    } catch (err) {
+      console.error("Error deleting address:", err);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -135,6 +153,7 @@ export function Profile({ onLogout, onNavigate }: { onLogout: () => void, onNavi
 
           <motion.button 
             whileTap={{ scale: 0.98 }}
+            onClick={() => setShowAddresses(true)}
             className="flex items-center justify-between p-6 bg-white rounded-3xl shadow-sm border-2 border-transparent hover:border-red-100 transition-all text-left"
           >
             <div className="flex items-center gap-4">
@@ -143,12 +162,73 @@ export function Profile({ onLogout, onNavigate }: { onLogout: () => void, onNavi
               </div>
               <div>
                 <p className="font-black text-gray-900 tracking-tight">Saved Addresses</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Home, Work, Village</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{profile?.savedAddresses?.length || 0} locations saved</p>
               </div>
             </div>
             <ArrowRight className="w-5 h-5 text-gray-300" />
           </motion.button>
         </div>
+
+        <AnimatePresence>
+          {showAddresses && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed inset-0 z-50 bg-white md:relative md:inset-auto md:bg-transparent md:z-0 md:pt-4"
+            >
+              <div className="p-6 md:p-0">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-black text-gray-900 tracking-tight">My Addresses</h3>
+                  <button onClick={() => setShowAddresses(false)} className="md:hidden p-2 bg-gray-100 rounded-full">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {(!profile?.savedAddresses || profile.savedAddresses.length === 0) ? (
+                    <div className="text-center p-12 bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-100">
+                      <MapPin className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                      <p className="text-gray-400 font-bold text-sm">No addresses saved yet.</p>
+                      <p className="text-[10px] text-gray-400 uppercase mt-1">Add one during checkout!</p>
+                    </div>
+                  ) : (
+                    profile.savedAddresses.map((addr: any) => (
+                      <Card key={addr.id} className="border-none shadow-sm rounded-3xl bg-white overflow-hidden group">
+                        <CardContent className="p-6 flex items-start justify-between gap-4">
+                          <div className="flex gap-4">
+                            <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400">
+                              <Home className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <p className="font-black text-gray-900">{addr.village || 'Personal Address'}</p>
+                              <p className="text-xs text-gray-500 font-medium mt-1">{addr.houseNumber}</p>
+                              <p className="text-[10px] font-black text-red-600 mt-2 uppercase tracking-widest">{addr.pincode}</p>
+                            </div>
+                          </div>
+                          <button 
+                            disabled={isDeleting === addr.id}
+                            onClick={() => handleDeleteAddress(addr.id)}
+                            className="p-3 bg-red-50 text-red-600 rounded-2xl opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity disabled:opacity-50"
+                          >
+                            {isDeleting === addr.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                          </button>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-14 rounded-2xl border-dashed border-2 border-red-100 text-red-600 font-black tracking-widest text-[10px] uppercase md:hidden"
+                    onClick={() => setShowAddresses(false)}
+                  >
+                    BACK TO PROFILE
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest ml-4 mt-8">Account</h3>
         <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">

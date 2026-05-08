@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { MapPin, User, Home, CheckCircle2, ArrowLeft, Loader2, Navigation, IndianRupee } from "lucide-react";
+import { MapPin, User, Home, CheckCircle2, ArrowLeft, Loader2, Navigation, IndianRupee, Save, Plus } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { motion } from "motion/react";
-import { db } from "@/src/lib/firebase";
-import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "@/src/lib/firebase";
+import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 
 interface CheckoutProps {
   total: number;
@@ -26,12 +26,28 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
     village: 'JMB Village',
     phone: user?.phoneNumber || '',
     pincode: '',
-    landmark: ''
+    landmark: '',
+    lat: null as number | null,
+    lng: null as number | null
   });
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [saveAddress, setSaveAddress] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      const fetchSavedAddresses = async () => {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setSavedAddresses(userDoc.data().savedAddresses || []);
+        }
+      };
+      fetchSavedAddresses();
+    }
+  }, [user]);
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
@@ -45,18 +61,23 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
+          const { latitude, longitude } = position.coords;
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
           const data = await res.json();
           
           setFormData(prev => ({
             ...prev,
-            houseNumber: data.display_name || `Lat: ${position.coords.latitude}, Lon: ${position.coords.longitude}`,
-            pincode: data.address?.postcode || prev.pincode
+            houseNumber: data.display_name || `Lat: ${latitude}, Lon: ${longitude}`,
+            pincode: data.address?.postcode || prev.pincode,
+            lat: latitude,
+            lng: longitude
           }));
         } catch (err) {
           setFormData(prev => ({
             ...prev,
-            houseNumber: `Lat: ${position.coords.latitude}, Lon: ${position.coords.longitude}`
+            houseNumber: `Lat: ${position.coords.latitude}, Lon: ${position.coords.longitude}`,
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
           }));
         } finally {
           setIsLocating(false);
@@ -69,6 +90,19 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
     );
   };
 
+  const selectAddress = (addr: any) => {
+    setFormData({
+      ...formData,
+      houseNumber: addr.houseNumber,
+      village: addr.village,
+      phone: addr.phone || formData.phone,
+      pincode: addr.pincode,
+      landmark: addr.landmark || '',
+      lat: addr.lat || null,
+      lng: addr.lng || null
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -77,22 +111,42 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
       return;
     }
 
-    if (formData.pincode !== VALID_PINCODE) {
-      console.warn(`Sorry, we only deliver to pincode ${VALID_PINCODE}`);
+    // Still suggest 814152 but don't strictly block if user insists?
+    // User said "user will write 814152 manually", implies they want to be ABLE to write it.
+    if (!formData.pincode) {
+      alert("Please enter a pincode.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Get the next serial order number
-      const ordersRef = collection(db, "orders");
-      const q = query(ordersRef, orderBy("orderNumber", "desc"), limit(1));
-      const querySnapshot = await getDocs(q);
+      if (saveAddress) {
+        const addressToSave = {
+          id: Date.now().toString(),
+          ...formData
+        };
+        await updateDoc(doc(db, "users", user.uid), {
+          savedAddresses: arrayUnion(addressToSave)
+        });
+      }
+
+      let nextOrderNumber = Math.floor(Date.now() / 1000); 
       
-      let nextOrderNumber = 1001;
-      if (!querySnapshot.empty) {
-        const lastOrder = querySnapshot.docs[0].data();
-        nextOrderNumber = (lastOrder.orderNumber || 1000) + 1;
+      try {
+        // Attempt to get the next serial order number - might fail if rules are strict
+        const ordersRef = collection(db, "orders");
+        const q = query(ordersRef, orderBy("orderNumber", "desc"), limit(1));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const lastOrder = querySnapshot.docs[0].data();
+          nextOrderNumber = (lastOrder.orderNumber || 1000) + 1;
+        } else {
+          nextOrderNumber = 1001;
+        }
+      } catch (err) {
+        console.warn("Could not fetch global order sequence, using local counter:", err);
+        // Fallback already set to timestamp
       }
 
       await addDoc(collection(db, "orders"), {
@@ -101,10 +155,12 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
           id: item.id,
           name: item.name,
           price: item.price,
-          quantity: item.quantity
+          quantity: item.quantity,
+          image: item.image || ''
         })),
         total,
         address: formData,
+        location: formData.lat ? { lat: formData.lat, lng: formData.lng } : null,
         status: 'pending',
         orderNumber: nextOrderNumber,
         createdAt: serverTimestamp()
@@ -115,8 +171,7 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
         onComplete();
       }, 3000);
     } catch (error) {
-      console.error("Error placing order:", error);
-      alert("Failed to place order. Please check your connection and try again.");
+      handleFirestoreError(error, OperationType.WRITE, "orders");
     } finally {
       setIsSubmitting(false);
     }
@@ -156,12 +211,38 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         <div className="space-y-6">
+          {savedAddresses.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
+                    <Save className="w-4 h-4 text-sky-600" />
+                  </div>
+                  <h2 className="font-black text-gray-900 tracking-tight uppercase text-[10px] md:text-xs">Quick Select</h2>
+                </div>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {savedAddresses.map((addr) => (
+                  <motion.button
+                    key={addr.id}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => selectAddress(addr)}
+                    className="flex-shrink-0 bg-white border border-gray-100 p-3 rounded-2xl shadow-sm hover:border-sky-200 transition-all text-left min-w-[140px]"
+                  >
+                    <p className="text-[10px] font-black text-sky-600 uppercase mb-1">{addr.village}</p>
+                    <p className="text-xs font-bold text-gray-900 truncate">{addr.houseNumber}</p>
+                  </motion.button>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
                 <MapPin className="w-4 h-4 text-sky-600" />
               </div>
-              <h2 className="font-black text-gray-900 tracking-tight uppercase text-[10px] md:text-xs">Delivery Address</h2>
+              <h2 className="font-black text-gray-900 tracking-tight uppercase text-[10px] md:text-xs">Address Details</h2>
             </div>
             
             <Card className="border-none shadow-sm bg-gray-50/50 rounded-2xl overflow-hidden">
@@ -202,8 +283,8 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pincode</Label>
                     <Input 
                       required 
-                      placeholder="814152"
-                      className={`bg-white border-gray-100 rounded-xl focus:ring-sky-500 h-11 md:h-12 ${formData.pincode && formData.pincode !== VALID_PINCODE ? "border-red-500" : ""}`}
+                      placeholder="Enter pincode (e.g. 814152)"
+                      className="bg-white border-gray-100 rounded-xl focus:ring-sky-500 h-11 md:h-12"
                       value={formData.pincode}
                       onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
                     />
@@ -218,6 +299,17 @@ export function Checkout({ total, cart, user, onBack, onComplete }: CheckoutProp
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaveAddress(!saveAddress)}
+                    className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${saveAddress ? 'bg-sky-600 border-sky-600' : 'border-gray-200'}`}
+                  >
+                    {saveAddress && <CheckCircle2 className="w-3 h-3 text-white" />}
+                  </button>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Save this address for future</span>
                 </div>
               </CardContent>
             </Card>

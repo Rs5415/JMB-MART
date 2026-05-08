@@ -1,17 +1,20 @@
 import { useState, useEffect, useMemo } from "react";
 import { db, auth } from "@/src/lib/firebase";
-import { collection, query, onSnapshot, updateDoc, doc, where, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, query, onSnapshot, updateDoc, doc, where, orderBy, serverTimestamp, getDoc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Package, MapPin, CheckCircle2, Loader2, Phone, Navigation, KeyRound, Home, LogOut, History, Wallet, Settings, LayoutDashboard, Bike, ReceiptText } from "lucide-react";
+import { Package, MapPin, CheckCircle2, Loader2, Phone, Navigation, KeyRound, Home, LogOut, History, Wallet, Settings, LayoutDashboard, Bike, ReceiptText, User } from "lucide-react";
 import { OrderBill } from "@/src/components/OrderBill";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion, AnimatePresence } from "motion/react";
 import { signOut } from "firebase/auth";
+import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useAdvancedMarkerRef } from '@vis.gl/react-google-maps';
+
+const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
 export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
   const [orders, setOrders] = useState<any[]>([]);
@@ -21,6 +24,7 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
   const [otpInputs, setOtpInputs] = useState<{[key: string]: string}>({});
   const [error, setError] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
 
   const handleLogout = async () => {
     try {
@@ -335,7 +339,19 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
 
         <TabsContent value="map" className="mt-0">
           <AnimatePresence mode="wait">
-            {currentLocation ? (
+            {!API_KEY ? (
+              <Card className="border-none shadow-sm rounded-3xl p-12 text-center bg-white">
+                <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 max-w-md mx-auto">
+                  <h3 className="text-lg font-black text-amber-900 mb-2">Google Maps API Key Required</h3>
+                  <p className="text-sm text-amber-700 font-bold mb-4">Please add GOOGLE_MAPS_PLATFORM_KEY to your Secrets to enable detailed maps.</p>
+                  <ol className="text-left text-xs space-y-2 text-amber-800 font-medium">
+                    <li>1. Get a key from Google Cloud Console</li>
+                    <li>2. Open Settings → Secrets</li>
+                    <li>3. Add GOOGLE_MAPS_PLATFORM_KEY</li>
+                  </ol>
+                </div>
+              </Card>
+            ) : currentLocation ? (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -345,38 +361,98 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
                 <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
                   <CardHeader className="flex flex-row items-center justify-between pb-2 bg-gray-50/50">
                     <div className="flex items-center gap-3">
-                      <div className="p-3 bg-red-600 rounded-2xl">
+                      <div className="p-3 bg-red-600 rounded-2xl shadow-lg shadow-red-100">
                         <MapPin className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Real-time Location</CardTitle>
-                        <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-red-600">Location tracking active</CardDescription>
+                        <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Fleet Command</CardTitle>
+                        <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-red-600">Tracking {activeOrders.length} active drops</CardDescription>
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      className="rounded-xl border-gray-200 font-bold text-xs"
-                      onClick={() => window.open(`https://www.google.com/maps?q=${currentLocation.lat},${currentLocation.lng}`, '_blank')}
-                    >
-                      NAVIGATE
-                    </Button>
+                    <div className="flex gap-2">
+                       <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-xl font-bold text-[10px] uppercase tracking-widest text-gray-400 hover:text-red-600"
+                        onClick={() => {
+                          const order = activeOrders.find(o => o.location);
+                          if (order) window.open(`https://www.google.com/maps/dir/${currentLocation.lat},${currentLocation.lng}/${order.location.lat},${order.location.lng}`, '_blank');
+                        }}
+                      >
+                        DIRECTIONS
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent className="p-4">
-                    <div className="h-[500px] w-full rounded-2xl overflow-hidden border border-gray-100 relative bg-gray-100">
-                      <iframe
-                        width="100%"
-                        height="100%"
-                        frameBorder="0"
-                        style={{ border: 0 }}
-                        src={`https://maps.google.com/maps?q=${currentLocation.lat},${currentLocation.lng}&z=15&output=embed shadow-xl`}
-                        allowFullScreen
-                      ></iframe>
-                      <div className="absolute bottom-6 left-6 right-6 bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-gray-100 shadow-xl flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Precise Coordinates</p>
-                          <p className="font-black text-gray-900">{currentLocation.lat.toFixed(6)}, {currentLocation.lng.toFixed(6)}</p>
+                    <div className="h-[600px] w-full rounded-2xl overflow-hidden border border-gray-100 relative bg-gray-100 shadow-inner">
+                      <APIProvider apiKey={API_KEY} version="weekly">
+                        <Map
+                          defaultCenter={currentLocation}
+                          defaultZoom={15}
+                          mapId="JMB_DELIVERY_MAP"
+                          className="w-full h-full"
+                          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+                        >
+                          {/* Partner Location Marker */}
+                          <AdvancedMarker position={currentLocation} title="You">
+                            <div className="relative">
+                              <div className="absolute -inset-4 bg-red-600/20 rounded-full animate-ping" />
+                              <div className="w-10 h-10 bg-red-600 rounded-2xl flex items-center justify-center border-4 border-white shadow-xl rotate-45">
+                                <Bike className="w-5 h-5 text-white -rotate-45" />
+                              </div>
+                            </div>
+                          </AdvancedMarker>
+
+                          {/* Order Markers */}
+                          {activeOrders.map(order => order.location && (
+                            <AdvancedMarker 
+                              key={order.id} 
+                              position={order.location} 
+                              onClick={() => setSelectedMarkerId(order.id)}
+                            >
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center border-2 border-white shadow-lg transition-transform hover:scale-110 ${
+                                order.status === 'out_for_delivery' ? 'bg-orange-500' : 'bg-blue-500'
+                              }`}>
+                                <Package className="w-4 h-4 text-white" />
+                              </div>
+                            </AdvancedMarker>
+                          ))}
+
+                          {selectedMarkerId && activeOrders.find(o => o.id === selectedMarkerId) && (
+                            <InfoWindow 
+                              position={activeOrders.find(o => o.id === selectedMarkerId)?.location}
+                              onCloseClick={() => setSelectedMarkerId(null)}
+                            >
+                              <div className="p-2 min-w-[150px]">
+                                <p className="font-black text-gray-900 border-b pb-1 mb-1">Order #{activeOrders.find(o => o.id === selectedMarkerId)?.orderNumber || selectedMarkerId?.slice(-5)}</p>
+                                <p className="text-xs font-bold text-gray-500">{activeOrders.find(o => o.id === selectedMarkerId)?.address?.name}</p>
+                                <p className="text-[10px] text-gray-400 mt-1">{activeOrders.find(o => o.id === selectedMarkerId)?.address?.houseNumber}</p>
+                                <Button 
+                                  size="sm" 
+                                  className="w-full mt-2 h-7 rounded-lg bg-red-600 text-[10px] font-black"
+                                  onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${currentLocation.lat},${currentLocation.lng}&destination=${activeOrders.find(o => o.id === selectedMarkerId)?.location.lat},${activeOrders.find(o => o.id === selectedMarkerId)?.location.lng}`, '_blank')}
+                                >
+                                  GO THERE
+                                </Button>
+                              </div>
+                            </InfoWindow>
+                          )}
+                        </Map>
+                      </APIProvider>
+                      
+                      <div className="absolute bottom-6 left-6 right-6 bg-white/95 backdrop-blur-md p-5 rounded-3xl border border-white/50 shadow-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100">
+                            <Navigation className="w-6 h-6 text-red-600" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Fleet Operational</p>
+                            <p className="font-black text-gray-900">{currentLocation.lat.toFixed(6)}, {currentLocation.lng.toFixed(6)}</p>
+                          </div>
                         </div>
-                        <Badge className="bg-red-50 text-red-600 border-none animate-pulse">LIVE</Badge>
+                        <div className="flex items-center gap-2">
+                           <Badge className="bg-red-50 text-red-600 border-none animate-pulse px-3 py-1 rounded-full font-black text-[10px]">LIVE SATELLITE</Badge>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -384,11 +460,11 @@ export function DeliveryDashboard({ onBack }: { onBack: () => void }) {
               </motion.div>
             ) : (
               <Card className="border-none shadow-sm rounded-3xl p-20 text-center bg-white flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
-                  <Navigation className="w-8 h-8 text-red-300 animate-bounce" />
+                <div className="w-20 h-20 bg-red-50 rounded-[2rem] flex items-center justify-center border-2 border-red-100 mb-2">
+                  <Navigation className="w-10 h-10 text-red-300 animate-bounce" />
                 </div>
-                <h3 className="text-xl font-black text-gray-900">Waiting for GPS...</h3>
-                <p className="text-gray-400 font-bold max-w-xs mx-auto">Please allow location access to enable navigation features.</p>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Acquiring GPS Signal...</h3>
+                <p className="text-gray-400 font-bold max-w-xs mx-auto text-sm">Please ensure location services are enabled and permissions are granted.</p>
               </Card>
             )}
           </AnimatePresence>

@@ -18,6 +18,23 @@
             "updatedAt": { "type": "string", "format": "date-time" }
           }
         },
+        "savedAddresses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "houseNumber": { "type": "string" },
+              "village": { "type": "string" },
+              "phone": { "type": "string" },
+              "pincode": { "type": "string" },
+              "landmark": { "type": "string" },
+              "lat": { "type": "number" },
+              "lng": { "type": "number" }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role", "phoneNumber"]
@@ -31,6 +48,13 @@
         "items": { "type": "array" },
         "total": { "type": "number" },
         "address": { "type": "object" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
         "landmark": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "assigned", "out_for_delivery", "delivered", "cancelled"] },
         "deliveryPersonId": { "type": "string" },
