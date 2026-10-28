@@ -10,13 +10,15 @@ export interface Product {
   status?: 'available' | 'out_of_stock' | 'unavailable';
 }
 
+import basmatiRiceImage from "@/src/assets/images/regenerated_image_1793160892205.jpg";
+
 export const products: Product[] = [
   {
     id: '1',
     name: 'Basmati Rice (5kg)',
     price: 450,
     category: 'Grains',
-    image: 'https://picsum.photos/seed/rice/400/400',
+    image: basmatiRiceImage,
     description: 'Premium long-grain basmati rice for your daily meals.',
     inStock: true
   },
